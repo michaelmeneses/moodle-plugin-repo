@@ -24,6 +24,18 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     if (!isset($url['path']) || strpos($plugin->source, 'http:') !== false) {
         continue;
     }
+    // Support to Moodle 3.2+
+    $suport = false;
+    foreach ($plugin->versions as $version) {
+        foreach ($version->supportedmoodles as $supportedmoodle) {
+            if ($suport || $supportedmoodle->version >= 2016120500) {
+                $suport = true;
+            }
+        }
+    }
+    if (!$suport){
+        continue;
+    }
     $username = trim(str_replace(basename($plugin->source), '', $url['path']), '/');
     $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin->source];
     $satisjson['require']["$username/$plugin->component"] = "*";
