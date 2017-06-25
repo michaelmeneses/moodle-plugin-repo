@@ -10,8 +10,7 @@ if (!$pluginlist = json_decode($pluginlistjson)) {
 }
 
 $satisjson = [];
-$satisjson['name'] = "middag/moodle-plugins";
-$satisjson['description'] = "Middag - Moodle Plugins";
+$satisjson['name'] = "Middag - Moodle Plugins";
 $satisjson['homepage'] = "http://satis.middag.com.br";
 $satisjson['repositories'] = [];
 $satisjson['require'] = [];
