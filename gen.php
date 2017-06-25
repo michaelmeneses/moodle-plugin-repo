@@ -38,7 +38,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     }
     $username = trim(str_replace(basename($plugin->source), '', $url['path']), '/');
     $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin->source];
-    $satisjson['require']["$username/$plugin->component"] = "*";
+    $satisjson['require']["$username/moodle-$plugin->component"] = "*";
 }
 
 file_put_contents($satisfile, json_encode($satisjson));
