@@ -20,10 +20,13 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     if (empty($plugin->component) || empty($plugin->source)) {
         continue;
     }
-    $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin->source];
     $url = parse_url($plugin->source);
-    $username = trim(str_replace(basename($plugin->source), '', $url["path"]), '/');
+    if (!isset($url['path']) || strpos($plugin->source, 'http:') !== false) {
+        continue;
+    }
+    $username = trim(str_replace(basename($plugin->source), '', $url['path']), '/');
+    $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin->source];
     $satisjson['require']["$username/$plugin->component"] = "*";
 }
 
-file_put_contents($satisfile, json_encode($satisjson, JSON_FORCE_OBJECT));
+file_put_contents($satisfile, json_encode($satisjson));
