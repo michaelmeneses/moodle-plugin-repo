@@ -36,8 +36,9 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         continue;
     }
     $username = trim(str_replace(basename($plugin->source), '', $url['path']), '/');
+    $repo = trim(str_replace('.git', '', str_replace(basename($username), '', $url['path'])), '/');
     $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin->source];
-    $satisjson['require']["$username/moodle-$plugin->component"] = "*";
+    $satisjson['require']["$username/$repo"] = "*";
 }
 
 file_put_contents($satisfile, json_encode($satisjson));
