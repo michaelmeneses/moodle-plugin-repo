@@ -11,7 +11,7 @@ if (!$pluginlist = json_decode($pluginlistjson)) {
 
 $satisjson = [];
 $satisjson['name'] = "Middag - Moodle Plugins";
-$satisjson['homepage'] = "http://satis.middag.com.br";
+$satisjson['homepage'] = "https://satis.middag.com.br";
 $satisjson['repositories'] = [];
 $satisjson['require'] = [];
 
@@ -38,6 +38,17 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     $username = trim(str_replace(basename($plugin->source), '', $url['path']), '/');
     $repo = trim(str_replace('.git', '', str_replace(basename($username), '', $url['path'])), '/');
     $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin->source];
+    $satisjson['require']["$username/$repo"] = "*";
+}
+
+$plugins = [
+    'https://github.com/michaelmeneses/moodle-theme_middag'
+];
+foreach ($plugins as $plugin) {
+    $url = parse_url($plugin);
+    $username = trim(str_replace(basename($plugin), '', $url['path']), '/');
+    $repo = trim(str_replace('.git', '', str_replace(basename($username), '', $url['path'])), '/');
+    $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin];
     $satisjson['require']["$username/$repo"] = "*";
 }
 
