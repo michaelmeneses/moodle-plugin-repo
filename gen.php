@@ -27,7 +27,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     $suport = false;
     foreach ($plugin->versions as $version) {
         foreach ($version->supportedmoodles as $supportedmoodle) {
-            if ($suport || $supportedmoodle->version >= 2016120500) {
+            if ($suport || $supportedmoodle->version >= 2015110100) {
                 $suport = true;
             }
         }
