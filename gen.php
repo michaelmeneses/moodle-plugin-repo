@@ -1,7 +1,7 @@
 <?php
 
 $api = "https://download.moodle.org/api/1.3/pluglist.php";
-$satisfile = __DIR__ . '/middag.json';
+$satisfile = __DIR__ . '/satis.json';
 
 $pluginlistjson = file_get_contents($api);
 
@@ -13,12 +13,16 @@ $satisjson = [];
 $satisjson['name'] = "Middag - Moodle Plugins";
 $satisjson['homepage'] = "https://satis.middag.com.br";
 $satisjson['repositories'] = [];
-$satisjson['require'] = [];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
     if (empty($plugin->component) || empty($plugin->source)) {
         continue;
     }
+    // Check if source (vcs repository) have a valid URL
+    if (filter_var($plugin->source, FILTER_VALIDATE_URL, FILTER_FLAG_SCHEME_REQUIRED) === false) {
+        continue;
+    }
+    // Check if source (vcs repository) is HTTPS
     $url = parse_url($plugin->source);
     if (!isset($url['path']) || strpos($plugin->source, 'http:') !== false) {
         continue;
@@ -32,24 +36,17 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             }
         }
     }
-    if (!$suport){
+    if (!$suport) {
         continue;
     }
-    $username = trim(str_replace(basename($plugin->source), '', $url['path']), '/');
-    $repo = trim(str_replace('.git', '', str_replace(basename($username), '', $url['path'])), '/');
+    // All right
     $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin->source];
-    $satisjson['require']["$username/$repo"] = "*";
 }
 
-$plugins = [
-    'https://github.com/michaelmeneses/moodle-theme_middag'
-];
-foreach ($plugins as $plugin) {
-    $url = parse_url($plugin);
-    $username = trim(str_replace(basename($plugin), '', $url['path']), '/');
-    $repo = trim(str_replace('.git', '', str_replace(basename($username), '', $url['path'])), '/');
-    $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin];
-    $satisjson['require']["$username/$repo"] = "*";
-}
+$satisjson['require-all'] = true;
+$satisjson['require-dependencies'] = true;
+$satisjson['require-dev-dependencies'] = true;
+$satisjson['output-dir'] = "public_html";
+$satisjson['archive'] = ["directory" => "dist", "format" => "tar"];
 
 file_put_contents($satisfile, json_encode($satisjson));
