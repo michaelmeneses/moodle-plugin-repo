@@ -43,6 +43,19 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin->source];
 }
 
+$plugins = [
+	['source' => 'https://github.com/michaelmeneses/moodle-block_completion_progress'],
+	['source' => 'https://github.com/michaelmeneses/moodle-filter_wiris'],
+	['source' => 'https://github.com/michaelmeneses/moodle-atto_wiris'],
+	['source' => 'https://github.com/michaelmeneses/moodle-tinymce_tiny_mce_wiris'],
+	['source' => 'https://github.com/michaelmeneses/moodle-format_topcoll'],
+	['source' => 'https://github.com/michaelmeneses/moodle-local_mailtest'],
+];
+
+foreach ($plugins as $plugin) {
+    $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin['source']];
+}
+
 $satisjson['require-all'] = true;
 $satisjson['require-dependencies'] = true;
 $satisjson['require-dev-dependencies'] = true;
