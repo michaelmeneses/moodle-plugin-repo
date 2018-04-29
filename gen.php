@@ -51,6 +51,11 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/moodle-tinymce_tiny_mce_wiris'],
 	['source' => 'https://github.com/michaelmeneses/moodle-format_topcoll'],
 	['source' => 'https://github.com/michaelmeneses/moodle-local_mailtest'],
+	['source' => 'https://github.com/michaelmeneses/moodle-local_welcome'],
+	['source' => 'https://github.com/michaelmeneses/moodle-local-kopere_dashboard'],
+	['source' => 'https://github.com/michaelmeneses/h5p-moodle-plugin'],
+	['source' => 'https://github.com/michaelmeneses/moodle-atto_htmlplus'],
+	['source' => 'https://github.com/michaelmeneses/moodle-objectives'],
 ];
 
 foreach ($plugins as $plugin) {
