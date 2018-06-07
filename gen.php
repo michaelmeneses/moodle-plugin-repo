@@ -56,7 +56,7 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/h5p-moodle-plugin'],
 	['source' => 'https://github.com/michaelmeneses/moodle-atto_htmlplus'],
 	['source' => 'https://github.com/michaelmeneses/moodle-objectives'],
-	['source' => 'https://github.com/michaelmeneses/moodle-block_lw_courses'],
+	['source' => 'https://github.com/michaelmeneses/moodle-mod_congrea'],
 ];
 
 foreach ($plugins as $plugin) {
