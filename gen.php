@@ -44,7 +44,6 @@ foreach ($pluginlist->plugins as $key => $plugin) {
 }
 
 $plugins = [
-	['source' => 'https://github.com/moodle/moodle'],
 	['source' => 'https://github.com/michaelmeneses/moodle-block_completion_progress'],
 	['source' => 'https://github.com/michaelmeneses/moodle-filter_wiris'],
 	['source' => 'https://github.com/michaelmeneses/moodle-atto_wiris'],
