@@ -44,6 +44,10 @@ foreach ($pluginlist->plugins as $key => $plugin) {
 }
 
 $plugins = [
+	['source' => 'https://github.com/michaelmeneses/moodle-booktool_wordimport'],
+	['source' => 'https://github.com/michaelmeneses/moodle-atto_styles'],
+	['source' => 'https://github.com/michaelmeneses/moodle-atto_morefontcolors'],
+	['source' => 'https://github.com/michaelmeneses/moodle-booktool_wordimport'],
 	['source' => 'https://github.com/michaelmeneses/moodle-block_completion_progress'],
 	['source' => 'https://github.com/michaelmeneses/moodle-filter_wiris'],
 	['source' => 'https://github.com/michaelmeneses/moodle-atto_wiris'],
