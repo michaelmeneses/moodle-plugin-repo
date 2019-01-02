@@ -44,6 +44,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
 }
 
 $plugins = [
+	['source' => 'https://github.com/michaelmeneses/mod_revealjs'],
 	['source' => 'https://github.com/michaelmeneses/moodle-booktool_wordimport'],
 	['source' => 'https://github.com/michaelmeneses/moodle-atto_styles'],
 	['source' => 'https://github.com/michaelmeneses/moodle-atto_morefontcolors'],
