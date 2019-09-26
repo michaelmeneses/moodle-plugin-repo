@@ -58,6 +58,7 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/moodle-atto_htmlplus'],
 	['source' => 'https://github.com/michaelmeneses/moodle-objectives'],
 	['source' => 'https://github.com/michaelmeneses/moodle-mod_congrea'],
+	['source' => 'https://github.com/michaelmeneses/moodle-theme_moove'],
 ];
 
 foreach ($plugins as $plugin) {
