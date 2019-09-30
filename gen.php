@@ -60,6 +60,7 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/moodle-mod_congrea'],
 	['source' => 'https://github.com/michaelmeneses/moodle-theme_moove'],
 	['source' => 'https://github.com/michaelmeneses/moodle-theme_snap'],
+	['source' => 'https://github.com/michaelmeneses/moodle-format_remuiformat'],
 ];
 
 foreach ($plugins as $plugin) {
