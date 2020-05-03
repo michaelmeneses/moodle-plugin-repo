@@ -18,6 +18,7 @@ $skiped = [
     'block_zilink',
     'moodle-langpacks',
     'theme_adaptable',
+    'bucket.org',
 ];
 
 $ignore = [
@@ -1012,10 +1013,14 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     }
     $url = preg_replace('{/$}', '', $url);
     // Skiped
+    $skip = false;
     foreach ($skiped as $item) {
         if (strpos($url, $item) !== false) {
-            continue;
+            $skip = true;
         }    
+    }
+    if ($skip) {
+        continue;
     }
     // Plugins without composer.json that we knows
     if (in_array($url, $ignore)) {
