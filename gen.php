@@ -748,6 +748,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     } else {
         $url = $plugin->source;
     }
+    $url = preg_replace('{/$}', '', $url);
     // Plugins without composer.json that we knows
     if (in_array($url, $ignore)) {
         continue;
