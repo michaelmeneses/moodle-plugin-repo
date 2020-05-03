@@ -109,6 +109,7 @@ $ignore = [
     'https://github.com/andrewhancox/datafield_tag',
     'https://github.com/andrewhancox/moodle-filter_formattimestamp',
     'https://github.com/andrewnicols/moodle-atto_fontsize',
+    'https://github.com/andrewnicols/moodle-atto_htmlplus',
     'https://github.com/andrewnicols/moodle-local_usertours',
     'https://github.com/andurif/moodle-theme_bandeau',
     'https://github.com/angelitro/moodle-block_globalad',
