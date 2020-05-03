@@ -18,6 +18,7 @@ $ignore = [
     'https://:@bucket.org/schoolsict/block_zilink.git',
     'https://bitbucket.org/covuni/bcu-course-checks-block',
     'https://bitbucket.org/covuni/moodle-mod_bootstrapelements',
+    'https://bitbucket.org/oasychev/moodle-plugins',
     'https://bitbucket.org/schoolsict/auth_zilink_guardian.git',
     'https://bitbucket.org/schoolsict/enrol_zilink.git',
     'https://bitbucket.org/schoolsict/enrol_zilink_cohort.git',
@@ -534,8 +535,15 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     if (!isset($url['path']) || strpos($plugin->source, 'http:') !== false) {
         continue;
     }
+    // Get first part from URLs with "/tree/"
+    $checkrepo = explode("/tree/", $plugin->source);
+    if (count($checkrepo) > 1) {
+        $url = $checkrepo[0];
+    } else {
+        $url = $plugin->source;
+    }
     // Plugins without composer.json that we knows
-    if (in_array($plugin->source, $ignore)) {
+    if (in_array($url, $ignore)) {
         continue;
     }
     // Support to Moodle 3.2+
@@ -551,7 +559,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         continue;
     }
     // All right
-    $satisjson['repositories'][] = ["type" => "vcs", "url" => $plugin->source];
+    $satisjson['repositories'][] = ["type" => "vcs", "url" => $url];
 }
 
 $plugins = [
