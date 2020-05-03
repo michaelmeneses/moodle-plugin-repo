@@ -14,8 +14,13 @@ $satisjson['name'] = "michaelmeneses/moodle-plugin-repo";
 $satisjson['homepage'] = "https://satis.middag.com.br";
 $satisjson['repositories'] = [];
 
+$skiped = [
+    'block_zilink',
+    'moodle-langpacks',
+    'theme_adaptable',
+];
+
 $ignore = [
-    'https://:@bucket.org/schoolsict/block_zilink.git',
     'https://bitbucket.org/covuni/bcu-course-checks-block',
     'https://bitbucket.org/covuni/moodle-block_course_discuss',
     'https://bitbucket.org/covuni/moodle-block_course_slider',
@@ -975,7 +980,6 @@ $ignore = [
     'https://gitlab.com/albertgasset/moodle-repository_s3links',
     'https://gitlab.com/albertgasset/moodle-workshopallocation_live',
     'https://gitlab.com/albertgasset/moodle-workshopeval_weightiest',
-    'https://gitlab.com/api/v4/projects/jezhops%2Fmoodle-theme_adaptable%2Ftree%2Fmaster',
     'https://gitlab.com/drlikm/format_etask',
     'https://gitlab.com/reskity/moodle-local_mail',
     'https://gitlab.com/ro-mdl-themes/moodle-theme_handlebar',
@@ -1007,6 +1011,12 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         $url = $plugin->source;
     }
     $url = preg_replace('{/$}', '', $url);
+    // Skiped
+    foreach ($skiped as $item) {
+        if (str_post($url, $item) !== false) {
+            continue;
+        }    
+    }
     // Plugins without composer.json that we knows
     if (in_array($url, $ignore)) {
         continue;
