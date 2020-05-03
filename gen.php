@@ -1013,7 +1013,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     $url = preg_replace('{/$}', '', $url);
     // Skiped
     foreach ($skiped as $item) {
-        if (str_pos($url, $item) !== false) {
+        if (strpos($url, $item) !== false) {
             continue;
         }    
     }
