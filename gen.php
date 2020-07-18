@@ -879,7 +879,6 @@ $ignore = [
     'https://github.com/trampgeek/moodle-qbehaviour_adaptive_adapted_for_coderunner',
     'https://github.com/trampgeek/moodle-qtype_coderunner',
     'https://github.com/trax-project/moodle-trax-logs',
-    'https://github.com/trema-tech/moodle-theme_trema',
     'https://github.com/troywilliams/moodle-mod_dialogue',
     'https://github.com/tunele/moodle-local_usersynccsv',
     'https://github.com/tunele/moodle-profilefield_dynamicmenu',
