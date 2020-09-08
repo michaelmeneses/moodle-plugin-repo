@@ -893,7 +893,6 @@ $ignore = [
     'https://github.com/UbiCastTeam/moodle-block_ubicast',
     'https://github.com/UbiCastTeam/moodle-mod_easycastms.git',
     'https://github.com/UbiCastTeam/moodle-mod_ubicast',
-    'https://github.com/ucla/moodle-mod_zoom',
     'https://github.com/uclmoodle/moodle-enrol_dbuserrel',
     'https://github.com/uclmoodle/moodle-report_myfeedback',
     'https://github.com/udima-university/moodle-mod_jitsi',
@@ -1060,7 +1059,6 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/moodle-theme_snap'],
 	['source' => 'https://github.com/michaelmeneses/moodle-format_remuiformat'],
 	['source' => 'https://github.com/michaelmeneses/moodle-block_grade_me'],
-	['source' => 'https://github.com/michaelmeneses/moodle-mod_zoom'],
 	['source' => 'https://gitlab.com/middagtecnologia/moodle-format_tiles'],
 ];
 
