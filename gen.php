@@ -1060,6 +1060,9 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/moodle-format_remuiformat'],
 	['source' => 'https://github.com/michaelmeneses/moodle-block_grade_me'],
 	['source' => 'https://gitlab.com/middagtecnologia/moodle-format_tiles'],
+	['source' => 'https://github.com/michaelmeneses/moodle-checklist'],
+	['source' => 'https://github.com/michaelmeneses/moodle-block_checklist'],
+	['source' => 'https://github.com/michaelmeneses/mod_richmedia'],
 ];
 
 foreach ($plugins as $plugin) {
