@@ -1067,6 +1067,7 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/moodle-mod_journal'],
 	['source' => 'https://github.com/michaelmeneses/moodle-mod_recordingsbn'],
 	['source' => 'https://github.com/michaelmeneses/moodle-mod_reengagement'],
+	['source' => 'https://github.com/michaelmeneses/repo_filemanager-moodle-block'],
 ];
 
 foreach ($plugins as $plugin) {
