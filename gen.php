@@ -1069,6 +1069,7 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/moodle-mod_reengagement'],
 	['source' => 'https://github.com/michaelmeneses/repo_filemanager-moodle-block'],
 	['source' => 'https://github.com/michaelmeneses/moodle-profilefield_cpf'],
+	['source' => 'https://github.com/michaelmeneses/moodle-profilefield_file'],
 ];
 
 foreach ($plugins as $plugin) {
