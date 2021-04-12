@@ -1063,6 +1063,7 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/moodle-checklist'],
 	['source' => 'https://github.com/michaelmeneses/moodle-block_checklist'],
 	['source' => 'https://github.com/michaelmeneses/mod_richmedia'],
+	['source' => 'https://github.com/michaelmeneses/moodle-mod_dialogue'],
 ];
 
 foreach ($plugins as $plugin) {
