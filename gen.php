@@ -1075,6 +1075,7 @@ $plugins = [
 	['source' => 'https://github.com/michaelmeneses/moodle-local_aws'],
 	['source' => 'https://github.com/michaelmeneses/moodle-tool_objectfs'],
 	['source' => 'https://github.com/michaelmeneses/moodle-tool_opcache'],
+	['source' => 'https://github.com/michaelmeneses/moodle-report_benchmark'],
 ];
 
 foreach ($plugins as $plugin) {
