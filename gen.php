@@ -282,6 +282,7 @@ $ignore = [
     'https://github.com/damyon/moodle-theme_photo',
     'https://github.com/danitome24/moodle-local_gradebook',
     'https://github.com/danmarsden/moodle-local_recompletion',
+    'https://github.com/danmarsden/moodle-mod_dialogue',
     'https://github.com/danmarsden/moodle-plagiarism_urkund',
     'https://github.com/darbycostello/moodle-tool_bulkemail',
     'https://github.com/dasistwas/moodle-block_booking',
