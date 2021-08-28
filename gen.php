@@ -863,6 +863,7 @@ $ignore = [
     'https://github.com/NMAI-lab/moodle-mod_socialwiki',
     'https://github.com/nyiajdev/moodle-local_megamenu',
     'https://github.com/onno-schuit/copycheck',
+    'https://github.com/onelogin/moodle-saml',
     'https://github.com/oohoo/moodle-mod_tab',
     'https://github.com/open-lms-open-source/moodle-mod_livepoll',
     'https://github.com/Opencast-Moodle/moodle-mod_opencast',
