@@ -1176,7 +1176,7 @@ $ignore = [
     'https://github.com/sebsoftnl/moodle-tool_userrestore',
     'https://github.com/sebsoftnl/moodle-tool_usersuspension',
     'https://github.com/xeois/activity_track',
-    'https://gitlab.com/3bits/joomdlebs.git',
+    'https://gitlab.com/3bits/joomdlebs',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
