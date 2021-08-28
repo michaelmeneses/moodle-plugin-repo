@@ -569,6 +569,7 @@ $ignore = [
     'https://github.com/josePFs/moodle-filter_tabs',
     'https://github.com/joshwillcock/moodle-auth_vulnerablepassword',
     'https://github.com/joshwillcock/moodle-local_abintegro',
+    'https://github.com/JotaDF/moodle-availability_game',
     'https://github.com/JotaDF/moodle-block_game',
     'https://github.com/jpahullo/moodle-repository_searchable',
     'https://github.com/jsxgraph/moodle-jsxgraph-plugin',
