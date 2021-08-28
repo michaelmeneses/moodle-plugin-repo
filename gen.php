@@ -1205,6 +1205,7 @@ $ignore = [
     'https://github.com/sebsoftnl/moodle-tool_usersuspension',
     'https://github.com/xeois/activity_track',
     'https://gitlab.com/3bits/joomdlebs',
+    'https://github.com/zafeer1996/moodle-gradingform-offl',
     // skiping for testing
     'https://github.com/blindsidenetworks/moodle-mod_bigbluebuttonbn',
     'https://github.com/davidherney/moodle-format_onetopic',
