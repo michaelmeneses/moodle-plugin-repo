@@ -1240,7 +1240,6 @@ $ignore = [
     'https://github.com/catalyst/moodle-enrol_auto',
     'https://github.com/xow/moodle-mod_quizgame',
     'https://github.com/marceloschmitt/moodle-block_analytics_graphs',
-    'https://github.com/marceloschmitt/moodle-block_telegram_forum',
     'https://github.com/MFreakNL/moodle-block_mfavatar',
     'https://github.com/justinhunt/moodle-repository_poodll',
     'https://github.com/bdaloukas/moodle-mod_game',
@@ -1274,6 +1273,9 @@ $ignore = [
     'https://github.com/alfatraining/alfaview-moodle-plugin',
     'https://github.com/tigusigalpa/moodle_admin_tool_imageoptimize',
     'https://github.com/catalyst/moodle-quizaccess_seb',
+    'https://github.com/EsupPortail/esup-mod_rocketchat',
+    'https://github.com/drillbit-dev/moodle-plagiarism_drillbit',
+    'https://github.com/lessonspace/moodle-mod_lessonspace',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
