@@ -1153,6 +1153,7 @@ $ignore = [
     'https://gricad-gitlab.univ-grenoble-alpes.fr/bizarda/moodle-qtype_vplquestion',
     'https://moodle.org/plugins/format_mindmap',
     'https://moofactory.fr/moofactory-notifications',
+    'https://github.com/Wunderbyte-GmbH/moodle-mod_booking',
     'https://github.com/Wunderbyte-GmbH/moodle-theme_squared',
     'https://github.com/brickfield/moodle-block_accessibility',
     'https://github.com/davidpesce/moodle-mod_tincanlaunch',
