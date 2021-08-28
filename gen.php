@@ -1026,6 +1026,7 @@ $ignore = [
     'https://github.com/synergylearning/moodle-mod_giportfolio',
     'https://github.com/synergylearning/moodle-mod_klassenbuch',
     'https://github.com/synergylearning/moodle-mod_vitero',
+    'https://github.com/SysBind/moodle-atto_wordcount',
     'https://github.com/Syxton/atto_sketch',
     'https://github.com/Syxton/moodle-filter_bookchapters',
     'https://github.com/Syxton/moodle-filter_sectionnames',
