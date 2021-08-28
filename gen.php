@@ -892,6 +892,7 @@ $ignore = [
     'https://github.com/nitinwaves/moodle-profilefield_multiselect',
     'https://github.com/NMAI-lab/moodle-mod_socialwiki',
     'https://github.com/nyiajdev/moodle-local_megamenu',
+    'https://github.com/oliviervalentin/moodle-mod_stickynotes',
     'https://github.com/onno-schuit/copycheck',
     'https://github.com/onelogin/moodle-saml',
     'https://github.com/oohoo/moodle-mod_tab',
