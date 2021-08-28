@@ -1003,6 +1003,7 @@ $ignore = [
     'https://github.com/thepurpleblob/moodle-block_course_overview',
     'https://github.com/thepurpleblob/moodle-report_assign',
     'https://github.com/thepurpleblob/moodle-tool_environment',
+    'https://github.com/tigusigalpa/moodle-auth_lenauth',
     'https://github.com/tim1mw/autoview-moodle-activity',
     'https://github.com/tim1mw/coursefilearea-moodle-repo',
     'https://github.com/tim1mw/repo_filemanager-moodle-block',
