@@ -1011,6 +1011,7 @@ $ignore = [
     'https://github.com/StudiUM/moodle-qtype_tcsjudgment',
     'https://github.com/StudiUM/moodle-report_cmcompetency',
     'https://github.com/StudiUM/moodle-report_lpmonitoring',
+    'https://github.com/StudiUM/moodle-quiz_markspersection',
     'https://github.com/StudiUM/moodle-tool_cmcompetency',
     'https://github.com/StudiUM/moodle-tool_cohortsync',
     'https://github.com/suipnice/moodle-mod_wims',
