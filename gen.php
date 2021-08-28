@@ -1219,6 +1219,12 @@ $ignore = [
     'https://github.com/xow/moodle-mod_quizgame',
     'https://github.com/marceloschmitt/moodle-block_analytics_graphs',
     'https://github.com/MFreakNL/moodle-block_mfavatar',
+    'https://github.com/justinhunt/moodle-repository_poodll',
+    'https://github.com/bdaloukas/moodle-mod_game',
+    'https://github.com/bozoh/moodle-mod_simplecertificate',
+    'https://github.com/dualcube/moodle-block_course_publish',
+    'https://gitlab.com/danielneis/moodle-block_featuredcourses',
+    'https://github.com/juacas/moodle-block_quest_classification',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
