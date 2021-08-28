@@ -1228,7 +1228,6 @@ $ignore = [
     'https://gitlab.com/danielneis/moodle-block_featuredcourses',
     'https://github.com/juacas/moodle-block_quest_classification',
     'https://github.com/aspiredu/moodle-local_aspiredu',
-    'https://github.com/xapi-vle/moodle-logstore_xapi',
     'https://github.com/danielneis/moodle-availability_maxviews',
     'https://github.com/ncstate-delta/moodle-mod_zoom',    
     'https://github.com/xapi-vle/moodle-logstore_xapi',
@@ -1266,7 +1265,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     }
     // Plugins without composer.json that we knows
     foreach ($ignore as $ignoreurl) {
-        if (strpos($url, $ignoreurl) !== false) {
+        if (stripos($url, $ignoreurl) !== false) {
             $skip = true;
         }
     }
