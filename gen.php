@@ -181,6 +181,7 @@ $ignore = [
     'https://github.com/bostelm/moodle-assignfeedback_solutionsheet',
     'https://github.com/bostelm/moodle-mod_scheduler',
     'https://github.com/bozoh/moodle-block_simple_certificate',
+    'https://github.com/braincert/moodle-mod_braincert',
     'https://github.com/branchup/moodle-enrol_xp',
     'https://github.com/branchup/moodle-filter_shortcodes',
     'https://github.com/brissone/moodle-qtype_musictheory',
