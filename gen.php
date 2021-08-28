@@ -1259,8 +1259,6 @@ $ignore = [
     'https://github.com/catalyst/moodle-enrol_auto',
     'https://github.com/xow/moodle-mod_quizgame',
     'https://github.com/marceloschmitt/moodle-block_analytics_graphs',
-    'https://github.com/marceloschmitt/moodle-block_telegram_forum',
-    'https://github.com/marceloschmitt/moodle-local_delete_course',
     'https://github.com/MFreakNL/moodle-block_mfavatar',
     'https://github.com/justinhunt/moodle-repository_poodll',
     'https://github.com/bdaloukas/moodle-mod_game',
@@ -1297,6 +1295,9 @@ $ignore = [
     'https://github.com/EsupPortail/esup-mod_rocketchat',
     'https://github.com/drillbit-dev/moodle-plagiarism_drillbit',
     'https://github.com/lessonspace/moodle-mod_lessonspace',
+    'https://github.com/JotaDF/moodle-format_trail',
+    'https://github.com/cperves/moodle-repository_pod',
+    'https://github.com/rwthanalytics/moodle-local_learning_analytics',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
