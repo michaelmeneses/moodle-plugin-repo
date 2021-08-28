@@ -617,6 +617,7 @@ $ignore = [
     'https://github.com/KepaUrzelai/moodle-atto_multilang2',
     'https://github.com/kepeter/moodle-block_knowledge_sharing',
     'https://github.com/kienv/Moodle-blocks_videochat',
+    'https://github.com/kiklop74/moodle-local_dompdf',
     'https://github.com/koenr/Moodle_openbiblo_block',
     'https://github.com/KQMATH/moodle-mod_capquiz',
     'https://github.com/KQMATH/moodle-mod_jazzquiz',
