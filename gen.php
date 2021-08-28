@@ -1262,8 +1262,11 @@ $ignore = [
     'https://github.com/learningworks/moodle-block_lw_courses',
     'https://github.com/learningworks/moodle-local_pages',
     'https://github.com/ArloSoftware/moodle-enrol_arlo',
-    'https://api.github.com/repos/moodleworkplace/moodle-tool_certificate',
-    'https://api.github.com/repos/trema-tech/moodle-theme_trema',
+    'https://github.com/moodleworkplace/moodle-tool_certificate',
+    'https://github.com/trema-tech/moodle-theme_trema',
+    'https://github.com/alfatraining/alfaview-moodle-plugin',
+    'https://github.com/tigusigalpa/moodle_admin_tool_imageoptimize',
+    'https://github.com/catalyst/moodle-quizaccess_seb',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
