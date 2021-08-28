@@ -970,6 +970,7 @@ $ignore = [
     'https://github.com/rschrenk/moodle-filter_h5p',
     'https://github.com/rschrenk/moodle-mod_confman',
     'https://github.com/RusticiSoftware/SCORMCloud_MoodleModule',
+    'https://github.com/rwthanalytics/moodle-logstore_lanalytics',
     'https://github.com/rwthmoodle/moodle-mod_pdfannotator',
     'https://github.com/safatshahin-dev/block_weather',
     'https://github.com/safatshahin-dev/moodle-block_simple_calculator',
