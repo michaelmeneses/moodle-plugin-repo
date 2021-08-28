@@ -752,6 +752,7 @@ $ignore = [
     'https://github.com/Microsoft/moodle-repository_onenote',
     'https://github.com/Microsoft/moodle-theme_boost_o365teams.git',
     'https://github.com/middlebury/moodle-mod_adaptivequiz',
+    'https://github.com/mihuasi/moodle-mod_goodhabits',
     'https://github.com/mikasmart/moodle-report_benchmark',
     'https://github.com/miniOrangeDev/moodle-local_mo_api',
     'https://github.com/miotto/moodle-fileconverter_flasksoffice',
