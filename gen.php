@@ -251,6 +251,7 @@ $ignore = [
     'https://github.com/center-for-learning-management/moodle-block_enrolcode',
     'https://github.com/center-for-learning-management/moodle-local_courseexpiry',
     'https://github.com/center-for-learning-management/moodle-local_edusupport',
+    'https://github.com/center-for-learning-management/moodle-local_webuntis',	
     'https://github.com/center-for-learning-management/moodle-mod_msteams',
     'https://github.com/central-queensland-uni/moodle-tool_crawler',
     'https://github.com/cescobedo/moodle-auth_dev.git',
