@@ -265,6 +265,7 @@ $ignore = [
     'https://github.com/corvus-albus/moodle-local_wsmanagesections',
     'https://github.com/CoticEaDIFRN/moodle_atto_justify',
     'https://github.com/cperves/moodle-block-my_external_backup_restore_courses.git',
+    'https://github.com/cperves/moodle-blocks-my_external_privatefiles.git',
     'https://github.com/CSUC/moodle-appsanywhere',
     'https://github.com/CTANZ/moodle-theme_decaf',
     'https://github.com/ctchanandy/moodle-report_forumgraph',
