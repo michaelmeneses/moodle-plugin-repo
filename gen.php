@@ -1219,7 +1219,7 @@ $ignore = [
     'https://github.com/xow/moodle-mod_quizgame',
     'https://github.com/marceloschmitt/moodle-block_analytics_graphs',
     'https://github.com/MFreakNL/moodle-block_mfavatar',
-    'https://github.com/justinhunt/moodle-repository_poodll.git',
+    'https://github.com/justinhunt/moodle-repository_poodll',
     'https://github.com/bdaloukas/moodle-mod_game',
     'https://github.com/bozoh/moodle-mod_simplecertificate',
     'https://github.com/dualcube/moodle-block_course_publish',
@@ -1257,7 +1257,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     }
     // Plugins without composer.json that we knows
     foreach ($ignore as $ignoreurl) {
-        if (strpos($ignoreurl, $url) !== false) {
+        if (strpos($url, $ignoreurl) !== false) {
             $skip = true;
         }
     }
