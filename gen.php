@@ -88,6 +88,7 @@ $ignore = [
     'https://github.com/academic-moodle-cooperation/moodle-report_offlinequizcron',
     'https://github.com/accredible/moodle-mod_accredible/releases',
     'https://github.com/actXc/moodle_filter_botr',
+    'https://github.com/adlcmdl/block_definitions',
     'https://github.com/adpe/moodle-local_pluginsfetcher',
     'https://github.com/adrienedunao/mod_richmedia',
     'https://github.com/aduranterres/auth_joomdle',
