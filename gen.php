@@ -1246,6 +1246,8 @@ $ignore = [
     'https://github.com/mdjnelson/moodle-mod_customcert',
     'https://github.com/danielneis/moodle-tool_syncgroups',
     'https://github.com/lafcolits/moodle-local_course_merge',
+    'https://github.com/open-lms-open-source/moodle-logstore_caliper',
+    'https://github.com/brandaorodrigo/moodle-format_buttons',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
