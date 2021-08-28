@@ -1226,6 +1226,7 @@ $ignore = [
     'https://gitlab.com/3bits/joomdlebs',
     'https://github.com/zafeer1996/moodle-gradingform-offl',
     // skiping for testing
+    /*
     'https://github.com/blindsidenetworks/moodle-mod_bigbluebuttonbn',
     'https://github.com/davidherney/moodle-format_onetopic',
     'https://github.com/jleyva/moodle-block_configurablereports',
@@ -1301,6 +1302,7 @@ $ignore = [
     'https://github.com/JotaDF/moodle-format_trail',
     'https://github.com/cperves/moodle-repository_pod',
     'https://github.com/rwthanalytics/moodle-local_learning_analytics',
+    */
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
