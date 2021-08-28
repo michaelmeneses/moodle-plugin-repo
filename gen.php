@@ -179,6 +179,7 @@ $ignore = [
     'https://github.com/blindsidenetworks/moodle-mod_recordingsbn',
     'https://github.com/blindsidenetworks/moodle-tinymce_recordrtc',
     'https://github.com/bmbrands/moodle-local_welcome',
+    'https://github.com/bmbrands/moodle-mod_swipe',
     'https://github.com/bmbrands/moodle-theme_classic',
     'https://github.com/bobopinna/moodle-enrol_autoenrol',
     'https://github.com/bobopinna/moodle-mod_reservation',
