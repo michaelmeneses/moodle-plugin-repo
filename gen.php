@@ -1182,6 +1182,42 @@ $ignore = [
     'https://github.com/sebsoftnl/moodle-tool_usersuspension',
     'https://github.com/xeois/activity_track',
     'https://gitlab.com/3bits/joomdlebs',
+    'skip-in-test',
+    'https://github.com/blindsidenetworks/moodle-mod_bigbluebuttonbn',
+    'https://github.com/repos/davidherney/moodle-format_onetopic',
+    'https://github.com/repos/jleyva/moodle-block_configurablereports',
+    'https://github.com/repos/markn86/moodle-mod_certificate',
+    'https://github.com/repos/gjb2048/moodle-format_grid',
+    'https://github.com/repos/fernandooliveira/moodle-block_marking_manager',
+    'https://github.com/repos/open-lms-open-source/moodle-mod_lightboxgallery',
+    'https://github.com/turnitin/moodle-plagiarism_turnitin',
+    'https://github.com/PoetOS/moodle-mod_questionnaire',
+    'https://github.com/gbateson/moodle-mod_hotpot',
+    'https://github.com/gbateson/moodle-qformat_hotpot',
+    'https://github.com/gtn/exacomp',
+    'https://github.com/justinhunt/moodle-repository_poodll',
+    'https://github.com/emeneo/moodle-enrol_apply',
+    'https://github.com/jcrodriguez-dis/moodle-mod_vpl',
+    'https://github.com/davidherney/moodle-format_menutopic',
+    'https://github.com/bmbrands/theme_bootstrap',
+    'https://github.com/bdaloukas/moodle-mod_game',
+    'https://github.com/danielneis/moodle-enrol_pagseguro',
+    'https://github.com/bozoh/moodle-mod_simplecertificate',
+    'https://github.com/ndunand/moodle-mergeusers',
+    'https://github.com/danpoltawski/moodle-repository_github',
+    'https://github.com/e-lang/moodle-mod_elang',
+    'https://github.com/danmarsden/moodle-block_attendance',
+    'https://github.com/danmarsden/moodle-mod_attendance',
+    'https://github.com/gjb2048/moodle-theme_essential',
+    'https://github.com/bmbrands/moodle-local_analytics',
+    'https://github.com/ndunand/moodle-tool_mergeusers',
+    'https://github.com/bmbrands/moodle-theme_elegance',
+    'https://github.com/FMCorz/moodle-block_xp',
+    'https://github.com/learningworks/moodle-block_enrolmenttimer',
+    'https://github.com/catalyst/moodle-enrol_auto',
+    'https://github.com/xow/moodle-mod_quizgame',
+    'https://github.com/marceloschmitt/moodle-block_analytics_graphs',
+    'https://github.com/MFreakNL/moodle-block_mfavatar',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
@@ -1210,13 +1246,15 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     foreach ($skiped as $item) {
         if (strpos($url, $item) !== false) {
             $skip = true;
-        }    
-    }
-    if ($skip) {
-        continue;
+        }
     }
     // Plugins without composer.json that we knows
-    if (in_array($url, $ignore)) {
+    foreach ($ignore as $ignoreurl) {
+        if (strpos($ignoreurl, $url) !== false) {
+            $skip = true;
+        }
+    }
+    if ($skip) {
         continue;
     }
     // Support to Moodle 3.2+
