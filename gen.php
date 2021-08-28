@@ -1241,9 +1241,9 @@ $ignore = [
     'https://github.com/ecampbell/moodle-booktool_wordimport',
     'https://github.com/danielneis/moodle-availability_paypal',
     'https://github.com/brandaorodrigo/moodle-format_board',
-    'https://api.github.com/repos/mdjnelson/moodle-mod_customcert',
-    'https://api.github.com/repos/danielneis/moodle-tool_syncgroups',
-    'https://api.github.com/repos/lafcolits/moodle-local_course_merge',
+    'https://github.com/mdjnelson/moodle-mod_customcert',
+    'https://github.com/danielneis/moodle-tool_syncgroups',
+    'https://github.com/lafcolits/moodle-local_course_merge',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
