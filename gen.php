@@ -415,6 +415,7 @@ $ignore = [
     'https://github.com/eLearning-TUDarmstadt/moodle-report_moodleanalyst',
     'https://github.com/eLearning-TUDarmstadt/moodle-tool_supporter',
     'https://github.com/elearningsoftware/moodle-mod_journal',
+    'https://github.com/elearning-univie/moodle-local_contactlist',
     'https://github.com/elearning-univie/moodle-mod_wordcloud',
     'https://github.com/eLearnTK/moodle-block_search_course_category',
     'https://github.com/eledia/block_eledia_suspenduser.git',
