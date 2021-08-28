@@ -773,6 +773,7 @@ $ignore = [
     'https://github.com/moodlehq/moodle-tool_inspire',
     'https://github.com/moodlehq/moodle-tool_lpimportoutcomes',
     'https://github.com/moodlehq/moodle-tool_migratehvp2h5p',
+    'https://github.com/moodlehq/moodle-tool_moodlenet',
     'https://github.com/moodlehq/moodle-tool_policy',
     'https://github.com/moodlehq/tool_translationmanager',
     'https://github.com/moodlehu/moodle-mod_etherpadlite',
