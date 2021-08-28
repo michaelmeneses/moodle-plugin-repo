@@ -870,6 +870,7 @@ $ignore = [
     'https://github.com/onno-schuit/copycheck',
     'https://github.com/onelogin/moodle-saml',
     'https://github.com/oohoo/moodle-mod_tab',
+    'https://github.com/open-lms-open-source/moodle-mod_collaborate',
     'https://github.com/open-lms-open-source/moodle-mod_livepoll',
     'https://github.com/openbadgefactory/obf-moodle',
     'https://github.com/Opencast-Moodle/moodle-mod_opencast',
@@ -1225,6 +1226,10 @@ $ignore = [
     'https://github.com/dualcube/moodle-block_course_publish',
     'https://gitlab.com/danielneis/moodle-block_featuredcourses',
     'https://github.com/juacas/moodle-block_quest_classification',
+    'https://github.com/aspiredu/moodle-local_aspiredu',
+    'https://github.com/xapi-vle/moodle-logstore_xapi',
+    'https://github.com/danielneis/moodle-availability_maxviews',
+    'https://github.com/ncstate-delta/moodle-mod_zoom',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
