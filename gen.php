@@ -1199,6 +1199,7 @@ $ignore = [
     'https://github.com/Wunderbyte-GmbH/moodle-mod_booking',
     'https://github.com/Wunderbyte-GmbH/moodle-theme_squared',
     'https://github.com/brickfield/moodle-block_accessibility',
+    'https://github.com/brickfield/moodle-mod_board',
     'https://github.com/davidpesce/moodle-mod_tincanlaunch',
     'https://github.com/dbauer-ets/moodle-qtype_formulas',
     'https://github.com/germanvaleroelizondo/moodle-tinymce_clozeeditor',
