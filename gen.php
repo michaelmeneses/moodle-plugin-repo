@@ -876,6 +876,7 @@ $ignore = [
     'https://github.com/onno-schuit/copycheck',
     'https://github.com/onelogin/moodle-saml',
     'https://github.com/oohoo/moodle-mod_tab',
+    'https://github.com/open-lms-open-source/moodle-filter_ally',
     'https://github.com/open-lms-open-source/moodle-mod_collaborate',
     'https://github.com/open-lms-open-source/moodle-mod_livepoll',
     'https://github.com/open-lms-open-source/moodle-tool_ally',
