@@ -878,6 +878,7 @@ $ignore = [
     'https://github.com/oohoo/moodle-mod_tab',
     'https://github.com/open-lms-open-source/moodle-mod_collaborate',
     'https://github.com/open-lms-open-source/moodle-mod_livepoll',
+    'https://github.com/open-lms-open-source/moodle-tool_ally',
     'https://github.com/openbadgefactory/obf-moodle',
     'https://github.com/Opencast-Moodle/moodle-mod_opencast',
     'https://github.com/openmeetings/openmeetings-moodle-plugin',
@@ -1251,6 +1252,10 @@ $ignore = [
     'https://github.com/lafcolits/moodle-local_course_merge',
     'https://github.com/open-lms-open-source/moodle-logstore_caliper',
     'https://github.com/brandaorodrigo/moodle-format_buttons',
+    'https://github.com/EduardoKrausME/moodle-local-kopere_dashboard',
+    'https://github.com/learningworks/moodle-block_lw_courses',
+    'https://github.com/learningworks/moodle-local_pages',
+    'https://github.com/ArloSoftware/moodle-enrol_arlo',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
