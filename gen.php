@@ -1205,6 +1205,7 @@ $ignore = [
     'https://github.com/open-lms-open-source/moodle-theme_snap',
     'https://github.com/sebsoftnl/moodle-auth_antihammer',
     'https://github.com/sebsoftnl/moodle-block_coupon',
+    'https://github.com/sebsoftnl/moodle-paygw_paynl',
     'https://github.com/sebsoftnl/moodle-tool_userrestore',
     'https://github.com/sebsoftnl/moodle-tool_usersuspension',
     'https://github.com/xeois/activity_track',
