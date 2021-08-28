@@ -424,6 +424,7 @@ $ignore = [
     'https://github.com/emmarichardson/local_autogroup',
     'https://github.com/enovation/moodle-atto_teamsmeeting',
     'https://github.com/ensembleVideo/moodle-repository_ensemble',
+    'https://github.com/EPPlugin/moodle-block_onlinesurvey',
     'https://github.com/erwang/filter_dbconcept.git',
     'https://github.com/Espadon-upf/moodle-qformat_ohie',
     'https://github.com/ethz-let/moodle-qtype_drawing',
