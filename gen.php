@@ -437,6 +437,7 @@ $ignore = [
     'https://github.com/eummena/moodle-antivirus_mimeblocker',
     'https://github.com/evalfor/moodle-block_evalcomix',
     'https://github.com/evltuma/moodle-mod_virtualpc',
+    'https://github.com/examus/moodle-availability_examus',
     'https://github.com/ewallah/moodle-availability_coursecompleted',
     'https://github.com/ewallah/moodle-availability_language',
     'https://github.com/ewallah/moodle-availability_relativedate.git',
