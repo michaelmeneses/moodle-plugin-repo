@@ -341,6 +341,7 @@ $ignore = [
     'https://github.com/dmonllao/moodle-local_latesubmissions',
     'https://github.com/doiphode/moodle-block_bulkactivity',
     'https://github.com/doiphode/moodle-local_simple_course_creator',
+    'https://github.com/doiphode/moodle-tool_clearbackupfiles',
     'https://github.com/donhinkelman/moodle-block_sharing_cart',
     'https://github.com/dpalou/moodle-atto_applink',
     'https://github.com/dpalou/moodle-atto_filterws',
