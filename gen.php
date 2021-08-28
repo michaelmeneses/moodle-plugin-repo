@@ -248,6 +248,7 @@ $ignore = [
     'https://github.com/Celumproject/moodle-mod_domoscio',
     'https://github.com/center-for-learning-management/moodle-auth_shibboleth_link',
     'https://github.com/center-for-learning-management/moodle-block_enrolcode',
+    'https://github.com/center-for-learning-management/moodle-local_courseexpiry',
     'https://github.com/center-for-learning-management/moodle-local_edusupport',
     'https://github.com/center-for-learning-management/moodle-mod_msteams',
     'https://github.com/central-queensland-uni/moodle-tool_crawler',
