@@ -1199,7 +1199,7 @@ $ignore = [
     'https://github.com/sebsoftnl/moodle-tool_usersuspension',
     'https://github.com/xeois/activity_track',
     'https://gitlab.com/3bits/joomdlebs',
-    'skip-in-test',
+    // skiping for testing
     'https://github.com/blindsidenetworks/moodle-mod_bigbluebuttonbn',
     'https://github.com/davidherney/moodle-format_onetopic',
     'https://github.com/jleyva/moodle-block_configurablereports',
@@ -1262,6 +1262,8 @@ $ignore = [
     'https://github.com/learningworks/moodle-block_lw_courses',
     'https://github.com/learningworks/moodle-local_pages',
     'https://github.com/ArloSoftware/moodle-enrol_arlo',
+    'https://api.github.com/repos/moodleworkplace/moodle-tool_certificate',
+    'https://api.github.com/repos/trema-tech/moodle-theme_trema',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
