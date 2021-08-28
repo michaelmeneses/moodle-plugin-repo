@@ -985,6 +985,7 @@ $ignore = [
     'https://github.com/streamingltd',
     'https://github.com/streamingltd/MEDIAL-Moodle-Feedback.git',
     'https://github.com/streamingltd/MEDIAL-Moodle-Filter.git',
+    'https://github.com/studentquiz/moodle-mod_studentquiz',
     'https://github.com/StudiUM/moodle-mod_concordance',
     'https://github.com/StudiUM/moodle-qtype_tcs',
     'https://github.com/StudiUM/moodle-qtype_tcsjudgment',
