@@ -108,6 +108,7 @@ $ignore = [
     'https://github.com/anayleeloolxp/moodle-block_leeloolxp_tracking',
     'https://github.com/anayleeloolxp/moodle-block_tb_clients',
     'https://github.com/anayleeloolxp/moodle-block_tb_faq',
+    'https://github.com/anayleeloolxp/moodle-block_tb_headings',
     'https://github.com/anayleeloolxp/moodle-block_tb_m_slots',
     'https://github.com/anayleeloolxp/moodle-block_tb_slider',
     'https://github.com/anayleeloolxp/moodle-block_tb_teachers',
