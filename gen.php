@@ -883,6 +883,7 @@ $ignore = [
     'https://github.com/open-lms-open-source/moodle-report_allylti',
     'https://github.com/open-lms-open-source/moodle-tool_ally',
     'https://github.com/openbadgefactory/obf-moodle',
+    'https://github.com/Opencast-Moodle/moodle-block_opencast',
     'https://github.com/Opencast-Moodle/moodle-mod_opencast',
     'https://github.com/openmeetings/openmeetings-moodle-plugin',
     'https://github.com/otatarintseva/moodle-auth_samlidp',
