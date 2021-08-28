@@ -720,6 +720,7 @@ $ignore = [
     'https://github.com/MFreakNL/moodle-block_fastnav',
     'https://github.com/MFreakNL/moodle-local_commander',
     'https://github.com/MFreakNL/moodle-mod_gcanvas',
+    'https://github.com/MFreakNL/moodle-tool_groupautoenrol',
     'https://github.com/michael-milette/moodle-filter_filtercodes',
     'https://github.com/michael-milette/moodle-theme_training',
     'https://github.com/Microsoft/moodle-assignfeedback_onenote',
@@ -1228,11 +1229,17 @@ $ignore = [
     'https://gitlab.com/danielneis/moodle-block_featuredcourses',
     'https://github.com/juacas/moodle-block_quest_classification',
     'https://github.com/aspiredu/moodle-local_aspiredu',
+    'https://github.com/xapi-vle/moodle-logstore_xapi',
     'https://github.com/danielneis/moodle-availability_maxviews',
     'https://github.com/ncstate-delta/moodle-mod_zoom',    
     'https://github.com/xapi-vle/moodle-logstore_xapi',
     'https://github.com/ecampbell/moodle-atto_wordimport',
     'https://github.com/syxton/moodle-tool_coursearchiver',
+    'https://github.com/michael-milette/moodle-local_mailtest',
+    'https://github.com/vidyamantra/moodle-mod_congrea',
+    'https://github.com/ecampbell/moodle-booktool_wordimport',
+    'https://github.com/danielneis/moodle-availability_paypal',
+    'https://github.com/brandaorodrigo/moodle-format_board',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
