@@ -450,6 +450,7 @@ $ignore = [
     'https://github.com/ferranrecio/tool_navdb',
     'https://github.com/ffhs/moodle-block_course_checker',
     'https://github.com/ffhs/moodle-filter_fontawesome',
+    'https://github.com/fmcorz/moodle-availability_stash',
     'https://github.com/FMCorz/moodle-availability_xp',
     'https://github.com/FMCorz/moodle-repository_evernote',
     'https://github.com/francpombal/moodle-theme_aigne',
