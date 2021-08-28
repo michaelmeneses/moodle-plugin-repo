@@ -133,6 +133,7 @@ $ignore = [
     'https://github.com/andrewnicols/moodle-atto_htmlplus',
     'https://github.com/andrewnicols/moodle-local_usertours',
     'https://github.com/andurif/moodle-gradeexport_apogee',
+    'https://github.com/andurif/moodle-mod_courselinks',
     'https://github.com/andurif/moodle-theme_bandeau',
     'https://github.com/andurif/moodle-tinymce_html_components',
     'https://github.com/angelitro/moodle-block_globalad',
