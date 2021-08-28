@@ -871,6 +871,7 @@ $ignore = [
     'https://github.com/onelogin/moodle-saml',
     'https://github.com/oohoo/moodle-mod_tab',
     'https://github.com/open-lms-open-source/moodle-mod_livepoll',
+    'https://github.com/openbadgefactory/obf-moodle',
     'https://github.com/Opencast-Moodle/moodle-mod_opencast',
     'https://github.com/openmeetings/openmeetings-moodle-plugin',
     'https://github.com/otatarintseva/moodle-auth_samlidp',
