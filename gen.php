@@ -1179,6 +1179,7 @@ $ignore = [
     'https://github.com/open-lms-open-source/moodle-local_mr',
     'https://github.com/open-lms-open-source/moodle-mod_hsuforum',
     'https://github.com/open-lms-open-source/moodle-theme_snap',
+    'https://github.com/sebsoftnl/moodle-auth_antihammer',
     'https://github.com/sebsoftnl/moodle-block_coupon',
     'https://github.com/sebsoftnl/moodle-tool_userrestore',
     'https://github.com/sebsoftnl/moodle-tool_usersuspension',
@@ -1229,7 +1230,10 @@ $ignore = [
     'https://github.com/aspiredu/moodle-local_aspiredu',
     'https://github.com/xapi-vle/moodle-logstore_xapi',
     'https://github.com/danielneis/moodle-availability_maxviews',
-    'https://github.com/ncstate-delta/moodle-mod_zoom',
+    'https://github.com/ncstate-delta/moodle-mod_zoom',    
+    'https://github.com/xapi-vle/moodle-logstore_xapi',
+    'https://github.com/ecampbell/moodle-atto_wordimport',
+    'https://github.com/syxton/moodle-tool_coursearchiver',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
