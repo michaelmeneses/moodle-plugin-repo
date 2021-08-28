@@ -906,6 +906,7 @@ $ignore = [
     'https://github.com/PawelSuwinski/moodle-qformat_simplecsv',
     'https://github.com/PeloNZ/moodle-block_yammer',
     'https://github.com/phish108/moodle-availability_enrol',
+    'https://github.com/PhilDevine/moodle-mod_labelcollapsed',
     'https://github.com/pinoke/moodle-mod_sna',
     'https://github.com/plagiarism/moodle-plagiarism_plagiarisma',
     'https://github.com/PlagiarismCheck/moodle-plagiarism_pchkorg',
