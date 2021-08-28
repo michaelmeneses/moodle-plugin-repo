@@ -364,6 +364,7 @@ $ignore = [
     'https://github.com/dthies/moodle-atto_fullscreen',
     'https://github.com/dthies/moodle-atto_mathslate',
     'https://github.com/dthies/moodle-atto_preview',
+    'https://github.com/dthies/moodle-contenttype_repurpose',
     'https://github.com/dthies/moodle-editor_tinymce-mathslate',
     'https://github.com/dthies/moodle-format_popups',
     'https://github.com/dthies/moodle-qbehaviour_adaptiveallnothing',
