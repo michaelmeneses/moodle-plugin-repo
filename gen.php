@@ -879,6 +879,7 @@ $ignore = [
     'https://github.com/open-lms-open-source/moodle-filter_ally',
     'https://github.com/open-lms-open-source/moodle-mod_collaborate',
     'https://github.com/open-lms-open-source/moodle-mod_livepoll',
+    'https://github.com/open-lms-open-source/moodle-plagiarism_safeassign',
     'https://github.com/open-lms-open-source/moodle-report_allylti',
     'https://github.com/open-lms-open-source/moodle-tool_ally',
     'https://github.com/openbadgefactory/obf-moodle',
