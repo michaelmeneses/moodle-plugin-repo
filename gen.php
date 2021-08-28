@@ -557,6 +557,7 @@ $ignore = [
     'https://github.com/jmvedrine/moodle-qtype_formulas',
     'https://github.com/johndimopoulos/moodle-gradingform_erubric',
     'https://github.com/jonof/moodle-antivirus_savdi',
+    'https://github.com/jonof/moodle-block_completion_progress',
     'https://github.com/JosePFs/moodle-block_horario.git',
     'https://github.com/josePFs/moodle-filter_tabs',
     'https://github.com/joshwillcock/moodle-auth_vulnerablepassword',
@@ -1240,6 +1241,9 @@ $ignore = [
     'https://github.com/ecampbell/moodle-booktool_wordimport',
     'https://github.com/danielneis/moodle-availability_paypal',
     'https://github.com/brandaorodrigo/moodle-format_board',
+    'https://api.github.com/repos/mdjnelson/moodle-mod_customcert',
+    'https://api.github.com/repos/danielneis/moodle-tool_syncgroups',
+    'https://api.github.com/repos/lafcolits/moodle-local_course_merge',
 ];
 
 foreach ($pluginlist->plugins as $key => $plugin) {
