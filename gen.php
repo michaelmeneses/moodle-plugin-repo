@@ -1260,6 +1260,7 @@ $ignore = [
     'https://github.com/xow/moodle-mod_quizgame',
     'https://github.com/marceloschmitt/moodle-block_analytics_graphs',
     'https://github.com/marceloschmitt/moodle-block_telegram_forum',
+    'https://github.com/marceloschmitt/moodle-local_delete_course',
     'https://github.com/MFreakNL/moodle-block_mfavatar',
     'https://github.com/justinhunt/moodle-repository_poodll',
     'https://github.com/bdaloukas/moodle-mod_game',
