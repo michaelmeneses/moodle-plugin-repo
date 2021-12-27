@@ -607,6 +607,7 @@ $ignore = [
     'https://github.com/eummena/moodle-antivirus_mimeblocker',
     'https://github.com/evalfor/moodle-block_evalcomix',
     'https://github.com/evasys-community/moodle-block_onlinesurvey',
+    'https://github.com/evasys-community/moodle-block_onlinesurvey/issues',
     'https://github.com/eveonmission/moodle-local_courseteam',
     'https://github.com/evltuma/moodle-mod_virtualpc',
     'https://github.com/ewallah/moodle-availability_coursecompleted',
