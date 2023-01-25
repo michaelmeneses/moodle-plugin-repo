@@ -32,8 +32,8 @@ $satisjson['name'] = 'middag/satis';
 $satisjson['homepage'] = 'https://satis.middag.com.br';
 $satisjson['repositories'] = [];
 $satisjson['require-all'] = true;
-$satisjson['require-dependencies'] = true;
-$satisjson['require-dev-dependencies'] = true;
+$satisjson['require-dependencies'] = false;
+$satisjson['require-dev-dependencies'] = false;
 $satisjson['output-dir'] = $outputdir;
 $satisjson['archive'] = ['directory' => 'dist', 'format' => 'zip'];
 
@@ -45,7 +45,7 @@ if (!$pluginlist = json_decode($pluginlistjson)) {
     die("Unable to read plugin list");
 }
 
-$plugins = [];
+$packages = [];
 foreach ($pluginlist->plugins as $key => $plugin) {
     if (empty($plugin->component) || empty($plugin->source)) {
         continue;
@@ -85,7 +85,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         $vendor = 'moodle';
     }
 
-    $plugins[$plugin->component] = [
+    $packages[$plugin->component] = [
         'type' => 'package',
         'package' => []
     ];
@@ -95,7 +95,6 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         $timecreated = date('Y-m-d', $version->timecreated);
     }
     $homepage = 'https://moodle.org/plugins/' . $plugin->component;
-    $description = opengraph_get_description($homepage);
     foreach ($plugin->versions as $version) {
         $supportedmoodles = [];
         foreach ($version->supportedmoodles as $supportedmoodle) {
@@ -104,7 +103,8 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             }
         }
         $supportedmoodles = implode(' || ', $supportedmoodles);
-        $plugins[$plugin->component]['package'][] = [
+
+        $package = [
             'name' => $vendor . '/moodle-' . $type . '_' . $name,
             'version' => $version->version,
             'type' => 'moodle-' . $type,
@@ -120,15 +120,34 @@ foreach ($pluginlist->plugins as $key => $plugin) {
                 'composer/installers' => '~1.0'
             ],
             'homepage' => $homepage,
-            'description' => $description,
             'time' => $timecreated,
-            'source' => $plugin->source,
         ];
+
+        if ($description = opengraph_get_description($homepage)) {
+            $package['description'] = $description;
+        }
+
+        if (isset($version->vcssystem) && $version->vcssystem == 'git') {
+            $reference = $version->version;
+            if ($version->vcsbranch) {
+                $reference = $version->vcsbranch;
+            }
+            if ($version->vcstag) {
+                $reference = $version->vcstag;
+            }
+            $package['source'] = [
+                'type' => $version->vcssystem,
+                'url' => $version->vcsrepositoryurl,
+                'reference' => $reference,
+            ];
+        }
+
+        $packages[$plugin->component]['package'][] = $package;
     }
 }
 
-foreach ($plugins as $plugin) {
-    $satisjson['repositories'][] = $plugin;
+foreach ($packages as $package) {
+    $satisjson['repositories'][] = $package;
 }
 
 $coremaxversions = [
@@ -152,9 +171,6 @@ $moodles = [
 ];
 foreach ($coremaxversions as $major => $max) {
     for ($i = $max; $i >= 0; $i--) {
-        if (count($moodles) > 3) {
-            continue;
-        }
         $versionno = $major . '.' . $i;
         $directory = 'stable' . str_replace('.', '', $major);
         if ($major >= 4) {
