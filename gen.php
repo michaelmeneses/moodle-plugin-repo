@@ -1,7 +1,21 @@
 <?php
 
-$api = "https://download.moodle.org/api/1.3/pluglist.php";
 $satisfile = __DIR__ . '/satis.json';
+
+if (!empty($_SERVER['argv'])) {
+    $rawoptions = $_SERVER['argv'];
+    foreach ($rawoptions as $raw) {
+        if (substr($raw, 0, 2) === '--') {
+            $value = substr($raw, 2);
+            $parts = explode('=', $value);
+            if (isset($parts[1])) {
+                $satisfile = $parts[1];
+            }
+        }
+    }
+}
+
+$api = "https://download.moodle.org/api/1.3/pluglist.php";
 
 $pluginlistjson = file_get_contents($api);
 
