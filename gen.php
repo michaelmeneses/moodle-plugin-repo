@@ -16,7 +16,7 @@ if (!empty($_SERVER['argv'])) {
             }
             if ($parts[0] == 'output-dir' && isset($parts[1])) {
                 $outputdir = $parts[1];
-                if (str_ends_with($outputdir, $folder)) {
+                if (!str_ends_with($outputdir, $folder)) {
                     $outputdir .= $folder;
                 }
             }
