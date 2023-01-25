@@ -18,7 +18,7 @@ if (!empty($_SERVER['argv'])) {
 $api = "https://download.moodle.org/api/1.3/pluglist.php";
 
 $pluginlistjson = file_get_contents($api);
-$allcomponents = file_get_contents(__DIR__ . 'components.json');
+$allcomponents = file_get_contents(__DIR__ . '/components.json');
 $allcomponents = json_decode($allcomponents, true);
 
 if (!$pluginlist = json_decode($pluginlistjson)) {
