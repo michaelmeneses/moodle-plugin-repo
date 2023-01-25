@@ -19,7 +19,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         continue;
     }
     // Check if source (vcs repository) have a valid URL
-    if (filter_var($plugin->source, FILTER_VALIDATE_URL, FILTER_FLAG_SCHEME_REQUIRED) === false) {
+    if (filter_var($plugin->source, FILTER_VALIDATE_URL) === false) {
         continue;
     }
     // Check if source (vcs repository) is HTTPS
