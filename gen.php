@@ -18,6 +18,8 @@ if (!empty($_SERVER['argv'])) {
 $api = "https://download.moodle.org/api/1.3/pluglist.php";
 
 $pluginlistjson = file_get_contents($api);
+$allcomponents = file_get_contents(__DIR__ . 'components.json');
+$allcomponents = json_decode($allcomponents, true);
 
 if (!$pluginlist = json_decode($pluginlistjson)) {
     die("Unable to read plugin list");
@@ -56,7 +58,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     }
 
     // All right
-    list($type, $name) = normalize_component($plugin->component);
+    list($type, $name) = normalize_component($plugin->component, $allcomponents);
 
     $vendor = 'moodle';
     if (in_array($url['host'], ['github.com', 'gitlab.com', 'bitbucket.org'])) {
@@ -110,6 +112,12 @@ foreach ($plugins as $plugin) {
     $satisjson['repositories'][] = $plugin;
 }
 
+$moodles = [];
+
+foreach ($moodles as $moodle) {
+    $satisjson['repositories'][] = $moodle;
+}
+
 file_put_contents($satisfile, json_encode($satisjson));
 
 /**
@@ -120,16 +128,14 @@ file_put_contents($satisfile, json_encode($satisjson));
  * @param string $component
  * @return array two-items list of [(string)type, (string|null)name]
  */
-function normalize_component($component)
+function normalize_component($component, $allcomponents)
 {
     if ($component === 'moodle' or $component === 'core' or $component === '') {
         return array('core', null);
     }
 
-    $components = file_get_contents('components.json');
-    $components = json_decode($components, true);
     if (strpos($component, '_') === false) {
-        if (array_key_exists($component, $components['subsystems'])) {
+        if (array_key_exists($component, $allcomponents['subsystems'])) {
             $type = 'core';
             $plugin = $component;
         } else {
