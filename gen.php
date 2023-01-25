@@ -2,14 +2,23 @@
 
 $satisfile = __DIR__ . '/satis.json';
 
+$folder = '/public_html';
+$outputdir = __DIR__ . $folder;
+
 if (!empty($_SERVER['argv'])) {
     $rawoptions = $_SERVER['argv'];
     foreach ($rawoptions as $raw) {
-        if (substr($raw, 0, 2) === '--') {
+        if (str_starts_with($raw, '--')) {
             $value = substr($raw, 2);
             $parts = explode('=', $value);
-            if (isset($parts[1])) {
+            if ($parts[0] == 'satisfile' && isset($parts[1])) {
                 $satisfile = $parts[1];
+            }
+            if ($parts[0] == 'output-dir' && isset($parts[1])) {
+                $outputdir = $parts[1];
+                if (str_ends_with($outputdir, $folder)) {
+                    $outputdir .= $folder;
+                }
             }
         }
     }
@@ -105,7 +114,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
 $satisjson['require-all'] = true;
 $satisjson['require-dependencies'] = true;
 $satisjson['require-dev-dependencies'] = true;
-$satisjson['output-dir'] = "public_html";
+$satisjson['output-dir'] = $outputdir;
 $satisjson['archive'] = ["directory" => "dist", "format" => "tar"];
 
 foreach ($plugins as $plugin) {
