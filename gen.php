@@ -90,6 +90,12 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         'package' => []
     ];
 
+    $timecreated = '';
+    if (isset($version->timecreated) && $version->timecreated > 0) {
+        $timecreated = date('Y-m-d', $version->timecreated);
+    }
+    $homepage = 'https://moodle.org/plugins/' . $plugin->component;
+    $description = opengraph_get_description($homepage);
     foreach ($plugin->versions as $version) {
         $supportedmoodles = [];
         foreach ($version->supportedmoodles as $supportedmoodle) {
@@ -112,7 +118,11 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             'require' => [
                 'moodle/moodle' => $supportedmoodles,
                 'composer/installers' => '~1.0'
-            ]
+            ],
+            'homepage' => $homepage,
+            'description' => $description,
+            'time' => $timecreated,
+            'source' => $plugin->source,
         ];
     }
 }
@@ -215,4 +225,107 @@ function normalize_component($component, $allcomponents)
     }
 
     return array($type, $plugin);
+}
+
+function opengraph_get_description($url)
+{
+    if ($graph = opengraph_fetch($url)) {
+        if (isset($graph['description'])) {
+            return $graph['description'];
+        }
+    }
+
+    return '';
+}
+
+function opengraph_fetch($URI)
+{
+    $curl = curl_init($URI);
+
+    curl_setopt($curl, CURLOPT_FAILONERROR, true);
+    curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($curl, CURLOPT_TIMEOUT, 15);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($curl, CURLOPT_USERAGENT, $_SERVER['HTTP_USER_AGENT']);
+
+    $response = curl_exec($curl);
+
+    curl_close($curl);
+
+    if (!empty($response)) {
+        return opengraph_parse($response);
+    } else {
+        return false;
+    }
+}
+
+function opengraph_parse($HTML)
+{
+    $old_libxml_error = libxml_use_internal_errors(true);
+
+    $doc = new DOMDocument();
+    $doc->loadHTML($HTML);
+
+    libxml_use_internal_errors($old_libxml_error);
+
+    $tags = $doc->getElementsByTagName('meta');
+    if (!$tags || $tags->length === 0) {
+        return false;
+    }
+
+    $values = [];
+
+    $nonOgDescription = null;
+
+    foreach ($tags as $tag) {
+        if ($tag->hasAttribute('property') &&
+            strpos($tag->getAttribute('property'), 'og:') === 0) {
+            $key = strtr(substr($tag->getAttribute('property'), 3), '-', '_');
+            $values[$key] = $tag->getAttribute('content');
+        }
+
+        //Added this if loop to retrieve description values from sites like the New York Times who have malformed it.
+        if ($tag->hasAttribute('value') && $tag->hasAttribute('property') &&
+            strpos($tag->getAttribute('property'), 'og:') === 0) {
+            $key = strtr(substr($tag->getAttribute('property'), 3), '-', '_');
+            $values[$key] = $tag->getAttribute('value');
+        }
+        //Based on modifications at https://github.com/bashofmann/opengraph/blob/master/src/OpenGraph/OpenGraph.php
+        if ($tag->hasAttribute('name') && $tag->getAttribute('name') === 'description') {
+            $nonOgDescription = $tag->getAttribute('content');
+        }
+
+    }
+    //Based on modifications at https://github.com/bashofmann/opengraph/blob/master/src/OpenGraph/OpenGraph.php
+    if (!isset($values['title'])) {
+        $titles = $doc->getElementsByTagName('title');
+        if ($titles->length > 0) {
+            $values['title'] = $titles->item(0)->textContent;
+        }
+    }
+    if (!isset($values['description']) && $nonOgDescription) {
+        $values['description'] = $nonOgDescription;
+    }
+
+    //Fallback to use image_src if ogp::image isn't set.
+    if (!isset($values['image'])) {
+        $domxpath = new DOMXPath($doc);
+        $elements = $domxpath->query("//link[@rel='image_src']");
+
+        if ($elements->length > 0) {
+            $domattr = $elements->item(0)->attributes->getNamedItem('href');
+            if ($domattr) {
+                $values['image'] = $domattr->value;
+                $values['image_src'] = $domattr->value;
+            }
+        }
+    }
+
+    if (empty($values)) {
+        return false;
+    }
+
+    return $values;
 }
