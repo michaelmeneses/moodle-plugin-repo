@@ -24,20 +24,26 @@ if (!empty($_SERVER['argv'])) {
     }
 }
 
-$api = "https://download.moodle.org/api/1.3/pluglist.php";
+$api = 'https://download.moodle.org/api/1.3/pluglist.php';
+$corebase = 'https://download.moodle.org/download.php/direct';
 
-$pluginlistjson = file_get_contents($api);
+$satisjson = [];
+$satisjson['name'] = 'middag/satis';
+$satisjson['homepage'] = 'https://satis.middag.com.br';
+$satisjson['repositories'] = [];
+$satisjson['require-all'] = true;
+$satisjson['require-dependencies'] = true;
+$satisjson['require-dev-dependencies'] = true;
+$satisjson['output-dir'] = $outputdir;
+$satisjson['archive'] = ['directory' => 'dist', 'format' => 'zip'];
+
 $allcomponents = file_get_contents(__DIR__ . '/components.json');
 $allcomponents = json_decode($allcomponents, true);
 
+$pluginlistjson = file_get_contents($api);
 if (!$pluginlist = json_decode($pluginlistjson)) {
     die("Unable to read plugin list");
 }
-
-$satisjson = [];
-$satisjson['name'] = "Middag - Moodle Plugins";
-$satisjson['homepage'] = "https://satis.middag.com.br";
-$satisjson['repositories'] = [];
 
 $plugins = [];
 foreach ($pluginlist->plugins as $key => $plugin) {
@@ -111,21 +117,68 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     }
 }
 
-$satisjson['require-all'] = true;
-$satisjson['require-dependencies'] = true;
-$satisjson['require-dev-dependencies'] = true;
-$satisjson['output-dir'] = $outputdir;
-$satisjson['archive'] = ["directory" => "dist", "format" => "tar"];
-
 foreach ($plugins as $plugin) {
     $satisjson['repositories'][] = $plugin;
 }
 
-$moodles = [];
+$coremaxversions = [
+    '4.1' => 1,
+    '4.0' => 2,
+    '3.11' => 8,
+    '3.10' => 11,
+    '3.9' => 15,
+    '3.8' => 9,
+    '3.7' => 9,
+    '3.6' => 10,
+    '3.5' => 18,
+    '3.4' => 9,
+    '3.3' => 9,
+    '3.2' => 9,
+];
 
-foreach ($moodles as $moodle) {
-    $satisjson['repositories'][] = $moodle;
+$moodles = [
+    'type' => 'package',
+    'package' => []
+];
+foreach ($coremaxversions as $major => $max) {
+    for ($i = $max; $i >= 0; $i--) {
+        if (count($moodles) > 3) {
+            continue;
+        }
+        $versionno = $major . '.' . $i;
+        $directory = 'stable' . str_replace('.', '', $major);
+        if ($major >= 4) {
+            $sub = str_replace('.', '', $major);
+            $directory = 'stable' . $sub[0] . '0' . $sub[1];
+        }
+        $filename = "moodle-$versionno.zip";
+        if ($i == '0') {
+            $filename = "moodle-$major.zip";
+        }
+        $url = $corebase . "/$directory/$filename";
+        $moodles['package'][] = [
+            'name' => 'moodle/moodle',
+            'version' => $versionno,
+            'dist' => [
+                'url' => $url,
+                'type' => 'zip'
+            ],
+            'require' => [
+                'composer/installers' => '*'
+            ]
+        ];
+    }
 }
+
+$satisjson['repositories'][] = $moodles;
+
+$satisjson['repositories'][] = [
+    'type' => 'composer',
+    'url' => 'https://packagist.org',
+    'exclude' => [
+        'moodle/moodle',
+    ]
+];
 
 file_put_contents($satisfile, json_encode($satisjson));
 
