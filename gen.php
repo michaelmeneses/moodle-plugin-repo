@@ -105,8 +105,10 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         }
         $supportedmoodles = implode(' || ', $supportedmoodles);
 
+        $packagename = $vendor . '/moodle-' . $type . '_' . $name;
+
         $package = [
-            'name' => $vendor . '/moodle-' . $type . '_' . $name,
+            'name' => $packagename,
             'version' => $version->version,
             'type' => 'moodle-' . $type,
             'dist' => [
@@ -129,6 +131,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         }
 
         $packages[$plugin->component]['package'][] = $package;
+        echo 'Loaded ' . $packagename . ((PHP_SAPI === 'cli') ? PHP_EOL : '<br>');
     }
 }
 
@@ -179,6 +182,8 @@ foreach ($coremaxversions as $major => $max) {
                 'composer/installers' => '*'
             ]
         ];
+
+        echo 'Loaded moodle/moodle - version: ' . $versionno . ((PHP_SAPI === 'cli') ? PHP_EOL : '<br>');
     }
 }
 
