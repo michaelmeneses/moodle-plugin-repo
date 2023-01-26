@@ -95,6 +95,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         $timecreated = date('Y-m-d', $version->timecreated);
     }
     $homepage = 'https://moodle.org/plugins/' . $plugin->component;
+    $description = opengraph_get_description($homepage);
     foreach ($plugin->versions as $version) {
         $supportedmoodles = [];
         foreach ($version->supportedmoodles as $supportedmoodle) {
@@ -123,7 +124,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             'time' => $timecreated,
         ];
 
-        if ($description = opengraph_get_description($homepage)) {
+        if ($description) {
             $package['description'] = $description;
         }
 
