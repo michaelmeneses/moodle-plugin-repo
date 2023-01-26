@@ -63,7 +63,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     $suport = false;
     foreach ($plugin->versions as $version) {
         foreach ($version->supportedmoodles as $supportedmoodle) {
-            if ($suport || $supportedmoodle->version >= 2015110100) {
+            if ($suport || $supportedmoodle->version >= 2016120500) {
                 $suport = true;
             }
         }
@@ -99,7 +99,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     foreach ($plugin->versions as $version) {
         $supportedmoodles = [];
         foreach ($version->supportedmoodles as $supportedmoodle) {
-            if ($suport || $supportedmoodle->version >= 2015110100) {
+            if ($suport || $supportedmoodle->version >= 2016120500) {
                 $supportedmoodles[] = $supportedmoodle->release . '.*';
             }
         }
