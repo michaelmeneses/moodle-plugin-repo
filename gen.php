@@ -198,14 +198,6 @@ foreach ($coremaxversions as $major => $max) {
 
 $satisjson['repositories'][] = $moodles;
 
-$satisjson['repositories'][] = [
-    'type' => 'composer',
-    'url' => 'https://packagist.org',
-    'exclude' => [
-        'moodle/moodle',
-    ]
-];
-
 file_put_contents($satisfile, json_encode($satisjson));
 
 /**
