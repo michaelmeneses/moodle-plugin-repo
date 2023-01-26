@@ -131,8 +131,9 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         }
 
         $packages[$plugin->component]['package'][] = $package;
-        echo 'Loaded ' . $packagename . ((PHP_SAPI === 'cli') ? PHP_EOL : '<br>');
     }
+
+    echo 'Loaded ' . $packagename . ((PHP_SAPI === 'cli') ? PHP_EOL : '<br>');
 }
 
 foreach ($packages as $package) {
