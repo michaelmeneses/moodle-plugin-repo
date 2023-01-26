@@ -128,21 +128,6 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             $package['description'] = $description;
         }
 
-        if (isset($version->vcssystem) && $version->vcssystem == 'git') {
-            $reference = $version->version;
-            if ($version->vcsbranch) {
-                $reference = $version->vcsbranch;
-            }
-            if ($version->vcstag) {
-                $reference = $version->vcstag;
-            }
-            $package['source'] = [
-                'type' => $version->vcssystem,
-                'url' => $version->vcsrepositoryurl,
-                'reference' => $reference,
-            ];
-        }
-
         $packages[$plugin->component]['package'][] = $package;
     }
 }
