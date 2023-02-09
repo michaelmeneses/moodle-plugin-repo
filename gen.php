@@ -140,7 +140,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             $package['description'] = $description;
         }
 
-        $packages[$plugin->component]['package'][] = $package;
+        $packages[$plugin->component]['package'][$version->version] = $package;
     }
 
     echo 'Loaded ' . $packagename . ((PHP_SAPI === 'cli') ? PHP_EOL : '<br>');
