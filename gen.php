@@ -57,6 +57,8 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     if (filter_var($plugin->source, FILTER_VALIDATE_URL) === false) {
         continue;
     }
+    // Check if source (vcs repository) is HTTPS
+    $url = parse_url($plugin->source);
     // Support to Moodle 3.2+
     $suport = false;
     foreach ($plugin->versions as $version) {
