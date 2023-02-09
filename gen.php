@@ -49,6 +49,7 @@ if (!$pluginlist = json_decode($pluginlistjson)) {
 }
 
 $packages = [];
+$greatversion = [];
 foreach ($pluginlist->plugins as $key => $plugin) {
     if (empty($plugin->component) || empty($plugin->source)) {
         continue;
@@ -61,10 +62,14 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     $url = parse_url($plugin->source);
     // Support to Moodle 3.2+
     $suport = false;
+    $greatversion[$plugin->component] = 0;
     foreach ($plugin->versions as $version) {
         foreach ($version->supportedmoodles as $supportedmoodle) {
             if ($suport || $supportedmoodle->version >= 2016120500) {
                 $suport = true;
+                if ($supportedmoodle->release > $greatversion[$plugin->component]) {
+                    $greatversion[$plugin->component] = $supportedmoodle->release;
+                }
             }
         }
     }
@@ -110,6 +115,11 @@ foreach ($pluginlist->plugins as $key => $plugin) {
                 $supportedmoodles[] = $prefix . $supportedmoodle->release . $sufix;
             }
         }
+
+        if ($greatversion[$plugin->component]) {
+            $supportedmoodles[] = '>' . $greatversion[$plugin->component];
+        }
+
         $supportedmoodles = implode(' || ', $supportedmoodles);
 
         $packagename = $vendor . '/moodle-' . $type . '_' . $name;
