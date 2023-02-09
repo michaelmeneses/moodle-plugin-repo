@@ -104,11 +104,13 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         foreach ($version->supportedmoodles as $supportedmoodle) {
             if ($suport || $supportedmoodle->version >= 2016120500) {
                 $prefix = '';
+                $sufix = '.*';
                 if ($supportedmoodle->release == MOODLE_LATEST
                     || $supportedmoodle->release == MOODLE_LATEST_BEFORE) {
                     $prefix = ">=";
+                    $sufix = '';
                 }
-                $supportedmoodles[] = $prefix . $supportedmoodle->release . '.*';
+                $supportedmoodles[] = $prefix . $supportedmoodle->release . $sufix;
             }
         }
         $supportedmoodles = implode(' || ', $supportedmoodles);
