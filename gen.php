@@ -1,5 +1,8 @@
 <?php
 
+const MOODLE_LATEST = "4.1";
+const MOODLE_LATEST_BEFORE = "4.0";
+
 $satisfile = __DIR__ . '/satis.json';
 
 $folder = '/public_html';
@@ -100,7 +103,12 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         $supportedmoodles = [];
         foreach ($version->supportedmoodles as $supportedmoodle) {
             if ($suport || $supportedmoodle->version >= 2016120500) {
-                $supportedmoodles[] = $supportedmoodle->release . '.*';
+                $prefix = '';
+                if ($supportedmoodle->release == MOODLE_LATEST
+                    || $supportedmoodle->release == MOODLE_LATEST_BEFORE) {
+                    $prefix = ">=";
+                }
+                $supportedmoodles[] = $prefix . $supportedmoodle->release . '.*';
             }
         }
         $supportedmoodles = implode(' || ', $supportedmoodles);
@@ -126,7 +134,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             'time' => $timecreated,
         ];
 
-        if ($description) {
+        if (isset($description) && $description) {
             $package['description'] = $description;
         }
 
