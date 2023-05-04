@@ -1,7 +1,7 @@
 <?php
 
-const MOODLE_LATEST = "4.1";
-const MOODLE_LATEST_BEFORE = "4.0";
+const MOODLE_LATEST = "4.2";
+const MOODLE_LATEST_BEFORE = "4.1";
 
 $satisfile = __DIR__ . '/satis.json';
 
@@ -158,11 +158,12 @@ foreach ($packages as $package) {
 }
 
 $coremaxversions = [
-    '4.1' => 1,
-    '4.0' => 2,
-    '3.11' => 8,
+    '4.2' => 0,
+    '4.1' => 3,
+    '4.0' => 8,
+    '3.11' => 14,
     '3.10' => 11,
-    '3.9' => 15,
+    '3.9' => 21,
     '3.8' => 9,
     '3.7' => 9,
     '3.6' => 10,
