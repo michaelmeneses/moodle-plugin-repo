@@ -1,7 +1,8 @@
 <?php
 
-const MOODLE_LATEST = "4.2";
-const MOODLE_LATEST_BEFORE = "4.1";
+const MOODLE_LATEST = "4.3";
+const MOODLE_LATEST_BEFORE = "4.2";
+const MOODLE_35_BUILD = "2018051700";
 
 $satisfile = __DIR__ . '/satis.json';
 
@@ -65,7 +66,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     $greatversion[$plugin->component] = 0;
     foreach ($plugin->versions as $version) {
         foreach ($version->supportedmoodles as $supportedmoodle) {
-            if ($suport || $supportedmoodle->version >= 2016120500) {
+            if ($suport || $supportedmoodle->version >= MOODLE_35_BUILD) {
                 $suport = true;
                 if ($supportedmoodle->release > $greatversion[$plugin->component]) {
                     $greatversion[$plugin->component] = $supportedmoodle->release;
@@ -104,7 +105,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     foreach ($plugin->versions as $version) {
         $supportedmoodles = [];
         foreach ($version->supportedmoodles as $supportedmoodle) {
-            if ($suport || $supportedmoodle->version >= 2016120500) {
+            if ($suport || $supportedmoodle->version >= MOODLE_35_BUILD) {
                 $prefix = '';
                 $sufix = '.*';
                 if ($supportedmoodle->release == MOODLE_LATEST
@@ -158,9 +159,9 @@ foreach ($packages as $package) {
 }
 
 $coremaxversions = [
-    '4.3' => 2,
-    '4.2' => 5,
-    '4.1' => 8,
+    '4.3' => 3,
+    '4.2' => 6,
+    '4.1' => 9,
     '4.0' => 12,
     '3.11' => 18,
     '3.10' => 11,
