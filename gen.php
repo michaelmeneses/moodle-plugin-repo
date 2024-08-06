@@ -138,7 +138,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             ],
             'require' => [
                 'moodle/moodle' => $supportedmoodles,
-                'composer/installers' => '~1.0'
+                'composer/installers' => '~1.0 || ~2.0'
             ],
             'homepage' => $homepage,
             'time' => $timecreated,
