@@ -12,5 +12,14 @@
             "name": "Michael Meneses",
             "email": "michael@middag.com.br"
         }
-    ]
+    ],
+    "require": {
+        "php": "^8.2",
+        "composer/satis": "dev-main"
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/satis": true
+        }
+    }
 }
