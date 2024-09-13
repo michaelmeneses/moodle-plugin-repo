@@ -143,7 +143,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             ],
             'require' => [
                 'moodle/moodle' => $supportedmoodles,
-                'composer/installers' => '~1.0'
+                'composer/installers' => '~1.0 || ~2.0'
             ],
             'homepage' => $homepage,
             'time' => $timecreated,
@@ -164,10 +164,10 @@ foreach ($packages as $package) {
 }
 
 $coremaxversions = [
-    '4.4' => 0,
-    '4.3' => 4,
-    '4.2' => 7,
-    '4.1' => 10,
+    '4.4' => 3,
+    '4.3' => 7,
+    '4.2' => 10,
+    '4.1' => 13,
     '4.0' => 12,
     '3.11' => 18,
     '3.10' => 11,
