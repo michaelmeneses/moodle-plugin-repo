@@ -44,7 +44,7 @@ $satisjson['require-all'] = true;
 $satisjson['require-dependencies'] = false;
 $satisjson['require-dev-dependencies'] = false;
 $satisjson['output-dir'] = $outputdir;
-$satisjson['archive'] = ['directory' => 'dist', 'format' => 'zip'];
+$satisjson['archive'] = (object)['directory' => 'dist', 'format' => 'zip'];
 
 $allcomponents = file_get_contents(__DIR__ . '/components.json');
 $allcomponents = json_decode($allcomponents, true);
