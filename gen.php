@@ -225,7 +225,8 @@ $validator->check((object)$satisjson, $schema);
 if (!$validator->isValid()) {
     echo 'Failed validation' . PHP_EOL;
     var_dump($validator->getErrors());
-    file_put_contents('error-' . date('Y-m-d-m-Y-H-i-s') . '-' . $satisfile, json_encode($satisjson));
+    $errorfile = str_replace('.json', '-error-' . date('Y-m-d-m-Y-H-i-s') . '.json', $satisfile);
+    file_put_contents($errorfile, json_encode($satisjson));
     exit(1);
 }
 
