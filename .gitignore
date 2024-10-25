@@ -3,3 +3,7 @@ satis.json
 .idea/
 public_html/
 vendor
+*.env
+!.env.example
+*.lock
+!composer.lock
