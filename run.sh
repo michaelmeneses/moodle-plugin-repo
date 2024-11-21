@@ -19,6 +19,7 @@ LOCK_CONTENT="$$"  # Use o ID do processo como conteúdo do lock
 LAST_RUN_FILE="satis_last_composer_update.lock"  # Arquivo para armazenar o timestamp da última execução do composer update
 set -e
 export COMPOSER_ALLOW_SUPERUSER=1 # Permitir execução do Composer como superusuário
+export INDEX_FILE="$SATIS_OUTPUTDIR/public_html/index.html"
 
 # Acessa o diretório onde o script está localizado
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -139,6 +140,17 @@ if ! vendor/bin/satis build "$SATIS_OUTPUTDIR/satis.json" --skip-errors --minify
   exit 1
 fi
 echo -e "\n"
+
+echo ">> Adicionando CSS customizado ao index.html"
+if [ -f "$INDEX_FILE" ]; then
+  echo "Adicionando CSS personalizado ao index.html"
+  sed -i '' '/<head>/a\
+    <style>.field-required-by {display: none !important;}</style>
+  ' "$INDEX_FILE"
+  echo "CSS inline adicionado com sucesso!"
+else
+  echo "Arquivo index.html não encontrado em $INDEX_FILE. Pulando adição de CSS."
+fi
 
 # Display time execution
 echo "> Concluindo"
