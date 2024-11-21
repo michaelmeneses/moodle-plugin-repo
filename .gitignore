@@ -7,3 +7,4 @@ vendor
 !.env.example
 *.lock
 !composer.lock
+opengraph_cache.json

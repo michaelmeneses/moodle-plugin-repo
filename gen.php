@@ -14,6 +14,14 @@ $satisfile = __DIR__ . '/satis.json';
 $folder = '/public_html';
 $outputdir = __DIR__ . $folder;
 
+$cacheFile = __DIR__ . '/opengraph_cache.json';
+
+// Init cache for OpenGraph
+if (!file_exists($cacheFile)) {
+    file_put_contents($cacheFile, json_encode([]));
+}
+$opengraphCache = json_decode(file_get_contents($cacheFile), true);
+
 if (!empty($_SERVER['argv'])) {
     $rawoptions = $_SERVER['argv'];
     foreach ($rawoptions as $raw) {
@@ -106,7 +114,17 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         $timecreated = date('Y-m-d', $version->timecreated);
     }
     $homepage = 'https://moodle.org/plugins/' . $plugin->component;
-    $description = opengraph_get_description($homepage);
+
+    // Usar ou atualizar o cache do OpenGraph
+    if (isset($opengraphCache[$homepage])) {
+        $description = $opengraphCache[$homepage];
+    } else {
+        $description = opengraph_get_description($homepage);
+        if ($description) {
+            $opengraphCache[$homepage] = $description;
+        }
+    }
+
     foreach ($plugin->versions as $version) {
         $supportedmoodles = [];
         foreach ($version->supportedmoodles as $supportedmoodle) {
@@ -230,4 +248,8 @@ if (!$validator->isValid()) {
     exit(1);
 }
 
+// Save OpenGraph cache
+file_put_contents($cacheFile, json_encode($opengraphCache));
+
+// Save satis.json
 file_put_contents($satisfile, json_encode($satisjson));
