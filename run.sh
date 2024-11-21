@@ -144,9 +144,7 @@ echo ">> Adicionando CSS customizado ao index.html"
 export INDEX_FILE="$SATIS_OUTPUTDIR/public_html/index.html"
 if [ -f "$INDEX_FILE" ]; then
   echo "Adicionando CSS personalizado ao index.html"
-  sed -i '' '/<head>/a\
-    <style>.field-required-by {display: none !important;}</style>
-  ' "$INDEX_FILE"
+  sed -i '/<head>/a <style>.field-required-by {display: none !important;}</style>' "$INDEX_FILE"
   echo "CSS inline adicionado com sucesso!"
 else
   echo "Arquivo index.html não encontrado em $INDEX_FILE. Pulando adição de CSS."
