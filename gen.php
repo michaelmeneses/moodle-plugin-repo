@@ -5,8 +5,8 @@ use JsonSchema\Validator;
 require 'vendor/autoload.php';
 require 'util.php';
 
-const MOODLE_LATEST = "4.5";
-const MOODLE_LATEST_BEFORE = "4.4";
+const MOODLE_LATEST = "5.0";
+const MOODLE_LATEST_BEFORE = "4.5";
 const MOODLE_35_BUILD = "2018051700";
 
 $satisfile = __DIR__ . '/satis.json';
