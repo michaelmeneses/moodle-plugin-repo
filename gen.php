@@ -241,7 +241,7 @@ $schemaFile = 'vendor/composer/satis/res/satis-schema.json';
 $schemaFileContents = file_get_contents($schemaFile);
 $schema = json_decode($schemaFileContents);
 $validator = new Validator();
-$validator->check((object)$satisjson, $schema);
+$validator->validate($satisjson, $schema);
 if (!$validator->isValid()) {
     echo 'Failed validation' . PHP_EOL;
     var_dump($validator->getErrors());
