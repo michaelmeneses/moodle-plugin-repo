@@ -2,8 +2,8 @@
 
 use JsonSchema\Validator;
 
-require 'vendor/autoload.php';
-require 'util.php';
+require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/util.php';
 
 const MOODLE_LATEST = "5.0";
 const MOODLE_LATEST_BEFORE = "4.5";
@@ -13,6 +13,8 @@ $satisfile = __DIR__ . '/satis.json';
 
 $folder = '/public_html';
 $outputdir = __DIR__ . $folder;
+$no_outputdir = false;
+$mode = 'satis'; // 'satis' or 's3-satis'
 
 $cacheFile = __DIR__ . '/opengraph_cache.json';
 
@@ -28,13 +30,23 @@ if (!empty($_SERVER['argv'])) {
         if (str_starts_with($raw, '--')) {
             $value = substr($raw, 2);
             $parts = explode('=', $value);
-            if ($parts[0] == 'satisfile' && isset($parts[1])) {
+            if ($parts[0] === 'satisfile' && isset($parts[1])) {
                 $satisfile = $parts[1];
             }
-            if ($parts[0] == 'output-dir' && isset($parts[1])) {
+            if ($parts[0] === 'output-dir' && isset($parts[1])) {
                 $outputdir = $parts[1];
                 if (!str_ends_with($outputdir, $folder)) {
                     $outputdir .= $folder;
+                }
+            }
+            if ($parts[0] === 'no-output-dir') {
+                $no_outputdir = true;
+            }
+            if ($parts[0] === 'mode' && isset($parts[1])) {
+                if (in_array($parts[1], ['satis', 's3-satis'])) {
+                    $mode = $parts[1];
+                } else {
+                    die("Invalid mode. Use 'satis' or 's3-satis'");
                 }
             }
         }
@@ -51,13 +63,34 @@ $satisjson['repositories'] = [];
 $satisjson['require-all'] = true;
 $satisjson['require-dependencies'] = false;
 $satisjson['require-dev-dependencies'] = false;
-$satisjson['output-dir'] = $outputdir;
+if (!$no_outputdir) {
+    $satisjson['output-dir'] = $outputdir;
+}
 $satisjson['archive'] = (object)['directory' => 'dist', 'format' => 'zip'];
+
+// Adicionar configuração s3-satis apenas quando tipo for 's3-satis'
+if ($mode === 's3-satis') {
+    $satisjson['s3-satis'] = (object)[
+        'plugins' => [
+            'cache' => [
+                'enabled' => true,
+            ],
+            'skip-step-after-hook' => [
+                'enabled' => true,
+                'skip' => [
+                    'BEFORE_INITIAL_CLEAR_TEMP_DIRECTORY',
+                    'BEFORE_REMOVE_MISSING_FILES_FROM_S3',
+                    'BEFORE_FINAL_CLEAR_TEMP_DIRECTORY'
+                ]
+            ]
+        ]
+    ];
+}
 
 $allcomponents = file_get_contents(__DIR__ . '/components.json');
 $allcomponents = json_decode($allcomponents, true);
 
-$pluginlistjson = file_get_contents($api);
+$pluginlistjson = get_content_from_url($api);
 if (!$pluginlist = json_decode($pluginlistjson)) {
     die("Unable to read plugin list");
 }
@@ -243,11 +276,27 @@ $validator = new Validator();
 $satisjson = (object)$satisjson;
 $validator->validate($satisjson, $schema);
 if (!$validator->isValid()) {
-    echo 'Failed validation' . PHP_EOL;
-    var_dump($validator->getErrors());
-    $errorfile = str_replace('.json', '-error-' . date('Y-m-d-m-Y-H-i-s') . '.json', $satisfile);
-    file_put_contents($errorfile, json_encode($satisjson));
-    exit(1);
+    $errors = $validator->getErrors();
+
+    // Remover erro de propriedade adicional 's3-satis' apenas quando tipo for 's3-satis'
+    if ($mode === 's3-satis') {
+        foreach ($errors as $key => $error) {
+            if (isset($error['constraint']['name'], $error['constraint']['params']['property'])) {
+                $constraint = $error['constraint'];
+                if ($constraint['name'] === 'additionalProp' && $constraint['params']['property'] === 's3-satis') {
+                    unset($errors[$key]);
+                }
+            }
+        }
+    }
+
+    if (count($errors)) {
+        echo 'Failed validation for mode: ' . $mode . PHP_EOL;
+        var_dump($errors);
+        $errorfile = str_replace('.json', '-error-' . date('Y-m-d-m-Y-H-i-s') . '.json', $satisfile);
+        file_put_contents($errorfile, json_encode($satisjson));
+        exit(1);
+    }
 }
 
 // Save OpenGraph cache

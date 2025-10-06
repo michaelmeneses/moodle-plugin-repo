@@ -15,6 +15,7 @@
     ],
     "require": {
         "php": "^8.2",
+        "ext-curl": "*",
         "composer/satis": "dev-main",
         "vlucas/phpdotenv": "^5.6"
     },
@@ -22,5 +23,30 @@
         "allow-plugins": {
             "composer/satis": true
         }
+    },
+    "scripts": {
+        "gen:satis": "php gen.php --mode=satis --satisfile=satis.json",
+        "gen:s3-satis": "php gen.php --mode=s3-satis --satisfile=s3-satis.json",
+        "build:satis": "./vendor/bin/satis build satis.json public_html --skip-errors",
+        "build:s3-satis": [
+            "@php -r \"if (!file_exists('s3-satis.phar')) { echo 'Error: s3-satis.phar not found in project root\\n'; exit(1); }\"",
+            "PROCESS_TIMEOUT=900 COMPOSER_PROCESS_TIMEOUT=900 php s3-satis.phar build s3-satis.json --skip-errors --no-interaction-s3"
+        ],
+        "full:satis": [
+            "@gen:satis",
+            "@build:satis"
+        ],
+        "full:s3-satis": [
+            "@gen:s3-satis",
+            "@build:s3-satis"
+        ]
+    },
+    "scripts-descriptions": {
+        "gen:satis": "Generate satis.json for original Composer Satis",
+        "gen:s3-satis": "Generate s3-satis.json for s3-satis with S3 support",
+        "build:satis": "Build repository using original Satis",
+        "build:s3-satis": "Build repository using s3-satis (requires s3-satis.phar in root)",
+        "full:satis": "Generate config and build with original Satis",
+        "full:s3-satis": "Generate config and build with s3-satis"
     }
 }
