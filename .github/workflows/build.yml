@@ -11,19 +11,20 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: php:8.2-cli
+      image: php:8.2-bookworm
       options: --user root
 
     env:
       COMPOSER_ALLOW_SUPERUSER: 1
       PROCESS_TIMEOUT: 900
       COMPOSER_PROCESS_TIMEOUT: 900
+      COMPOSER_MEMORY_LIMIT: -1
 
-      # Envs variables for Satis MIDDAG
+      # Envs for Satis MIDDAG
       SATIS_NAME: ${{ vars.SATIS_NAME }}
       SATIS_URL: ${{ vars.SATIS_URL }}
 
-      # Envs variables for S3 Satis
+      # Envs for S3 Satis (Cloudflare R2)
       S3_BUCKET: ${{ vars.S3_BUCKET }}
       S3_ACCESS_KEY_ID: ${{ vars.S3_ACCESS_KEY_ID }}
       S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
@@ -32,18 +33,20 @@ jobs:
       S3_USE_PATH_STYLE_ENDPOINT: ${{ vars.S3_USE_PATH_STYLE_ENDPOINT }}
 
     steps:
+      - name: Checkout source-code
+        uses: actions/checkout@v4
+
       - name: Install PHP extensions & tools
         run: |
           apt-get update && apt-get install -y \
-            git unzip curl \
+            git unzip curl zip \
             libzip-dev libxml2-dev libcurl4-openssl-dev \
-            php-zip php-curl php-mbstring php-bcmath php-intl php-xml
-
+            php-zip php-curl php-mbstring php-bcmath php-intl php-xml \
+            php-dom php-json
           curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-          php -m
-
-      - name: Checkout source-code
-        uses: actions/checkout@v4
+          composer --version
+          php -v
+          php -m | sort
 
       - name: Cache Composer dependencies
         uses: actions/cache@v4
@@ -52,6 +55,9 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
+
+      - name: Validate Composer platform requirements
+        run: composer check-platform-reqs || true
 
       - name: Install Composer dependencies
         run: composer install --no-dev --prefer-dist --optimize-autoloader
