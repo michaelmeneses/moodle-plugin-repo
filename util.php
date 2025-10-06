@@ -224,29 +224,32 @@ function opengraph_get_cached_info(string $url, array $cache, ?int $cacheDays = 
 }
 
 /**
- * Perform HTTP request using cURL (centralized helper function).
+ * Get content from a URL using cURL with headers for JSON.
  *
  * @param string $url URL to request
- * @param array $additionalOptions Additional cURL options
  * @return string Response content
  * @throws RuntimeException If the request fails
  */
-function curl_get_content(string $url, array $additionalOptions = []): string
+function get_content_from_url(string $url): string
 {
     $ch = curl_init($url);
     if ($ch === false) {
         throw new RuntimeException('Failed to initialize cURL');
     }
 
-    $defaultOptions = [
+    $options = [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_FAILONERROR => true,
         CURLOPT_TIMEOUT => 30,
         CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json',
+            'Accept-Language: en-US,en;q=0.9',
+        ],
     ];
 
-    curl_setopt_array($ch, $defaultOptions + $additionalOptions);
+    curl_setopt_array($ch, $options);
 
     $response = curl_exec($ch);
     $error = curl_error($ch);
@@ -262,21 +265,4 @@ function curl_get_content(string $url, array $additionalOptions = []): string
     }
 
     return $response;
-}
-
-/**
- * Get content from a URL using cURL with headers for JSON.
- *
- * @param string $url URL to request
- * @return string Response content
- * @throws RuntimeException If the request fails
- */
-function get_content_from_url(string $url): string
-{
-    return curl_get_content($url, [
-        CURLOPT_HTTPHEADER => [
-            'Accept: application/json',
-            'Accept-Language: en-US,en;q=0.9',
-        ],
-    ]);
 }
