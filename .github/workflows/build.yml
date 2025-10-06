@@ -7,15 +7,14 @@ on:
 
 jobs:
   build:
+    name: Build and Deploy Satis
     runs-on: ubuntu-latest
 
     container:
-      image: composer:2.7-php8.2
-      options: --user root
+      image: composer:latest
 
     env:
       COMPOSER_ALLOW_SUPERUSER: 1
-      PROCESS_TIMEOUT: 900
       COMPOSER_PROCESS_TIMEOUT: 900
 
       # Envs variables for S3 Satis
@@ -30,10 +29,19 @@ jobs:
       - name: Checkout source-code
         uses: actions/checkout@v4
 
-      - name: Install Composer
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
         run: composer install --no-dev --prefer-dist --optimize-autoloader
 
       - name: Build s3-satis
         run: |
+          set -e
           echo "Running composer run full:s3-satis"
           composer run full:s3-satis
