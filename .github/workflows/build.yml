@@ -11,10 +11,12 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: composer:latest
+      image: php:8.2-cli
+      options: --user root
 
     env:
       COMPOSER_ALLOW_SUPERUSER: 1
+      PROCESS_TIMEOUT: 900
       COMPOSER_PROCESS_TIMEOUT: 900
 
       # Envs variables for Satis MIDDAG
@@ -30,8 +32,10 @@ jobs:
       S3_USE_PATH_STYLE_ENDPOINT: ${{ vars.S3_USE_PATH_STYLE_ENDPOINT }}
 
     steps:
-      - name: Install system dependencies
-        run: apt-get update && apt-get install -y git
+      - name: Install Composer & Git
+        run: |
+          apt-get update && apt-get install -y git unzip curl
+          curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
       - name: Checkout source-code
         uses: actions/checkout@v4
