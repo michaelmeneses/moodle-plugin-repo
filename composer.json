@@ -32,7 +32,7 @@
         "build:satis": "./vendor/bin/satis build satis.json public_html --skip-errors",
         "build:s3-satis": [
             "@php -r \"if (!file_exists('s3-satis.phar')) { echo 'Error: s3-satis.phar not found in project root\\n'; exit(1); }\"",
-            "PROCESS_TIMEOUT=900 COMPOSER_PROCESS_TIMEOUT=900 php s3-satis.phar build s3-satis.json --skip-errors --no-interaction-s3"
+            "PROCESS_TIMEOUT=1800 COMPOSER_PROCESS_TIMEOUT=1800 php s3-satis.phar build s3-satis.json --skip-errors --no-interaction-s3"
         ],
         "full:satis": [
             "@gen:satis",
