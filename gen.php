@@ -148,15 +148,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     }
     $homepage = 'https://moodle.org/plugins/' . $plugin->component;
 
-    // Usar ou atualizar o cache do OpenGraph
-    if (isset($opengraphCache[$homepage])) {
-        $description = $opengraphCache[$homepage];
-    } else {
-        $description = opengraph_get_description($homepage);
-        if ($description) {
-            $opengraphCache[$homepage] = $description;
-        }
-    }
+    $opengraphCache[$homepage] = opengraph_get_cached_info($homepage, $opengraphCache);
 
     foreach ($plugin->versions as $version) {
         $supportedmoodles = [];
@@ -200,8 +192,8 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             'time' => $timecreated,
         ];
 
-        if (isset($description) && $description) {
-            $package['description'] = $description;
+        if (!empty($opengraphCache[$homepage]['description'])) {
+            $package['description'] = $opengraphCache[$homepage]['description'];
         }
 
         $packages[$plugin->component]['package'][$version->version] = $package;

@@ -67,118 +67,160 @@ function normalize_component(string $component, array $allcomponents): array
 }
 
 /**
- * Get the OpenGraph description from a URL.
+ * Fetch complete OpenGraph information from a URL using embed/embed library.
  *
- * @param string $url URL to fetch the description from
- * @return string Description found or empty string
+ * @param string $url URL to fetch metadata from
+ * @param bool $forceRefresh Force refresh even if cached (ignora timestamp)
+ * @return array{
+ *     title: string,
+ *     description: string,
+ *     image: string,
+ *     url: string,
+ *     site_name: string,
+ *     author: string,
+ *     published_time: string,
+ *     keywords: array<string>,
+ *     cached_at: int
+ * } Structured OpenGraph data with all fields normalized
  */
-function opengraph_get_description(string $url): string
+function opengraph_fetch_info(string $url, bool $forceRefresh = false): array
 {
+    $currentTimestamp = time();
+
+    $defaultResponse = [
+        'title' => '',
+        'description' => '',
+        'image' => '',
+        'url' => $url,
+        'site_name' => '',
+        'author' => '',
+        'published_time' => '',
+        'keywords' => [],
+        'cached_at' => $currentTimestamp,
+    ];
+
     try {
-        $graph = opengraph_fetch($url);
-        return $graph['description'] ?? '';
-    } catch (RuntimeException $e) {
-        return '';
+        $embed = new \Embed\Embed();
+        $info = $embed->get($url);
+
+        // Extrair título com fallbacks
+        $title = $info->title ?? '';
+        if (empty($title)) {
+            $metas = $info->getMetas()->all();
+            $title = $metas['og:title'] ?? $metas['twitter:title'] ?? '';
+        }
+
+        // Extrair descrição com fallbacks
+        $description = $info->description ?? '';
+        if (empty($description)) {
+            $metas = $info->getMetas()->all();
+            $description = $metas['og:description']
+                ?? $metas['twitter:description']
+                ?? $metas['description']
+                ?? '';
+        }
+
+        // Extrair imagem com fallbacks
+        $image = '';
+        if ($info->image) {
+            $image = (string)$info->image;
+        } else {
+            $metas = $info->getMetas()->all();
+            $image = $metas['og:image'] ?? $metas['twitter:image'] ?? '';
+        }
+
+        // Extrair URL canônica
+        $canonicalUrl = $info->url ?? $url;
+
+        // Extrair tipo (article, website, etc.)
+        $metas = $info->getMetas()->all();
+
+        // Extrair nome do site
+        $siteName = $metas['og:site_name'] ?? '';
+        if (empty($siteName) && $info->authorName) {
+            $siteName = $info->authorName;
+        }
+
+        // Extrair autor
+        $author = $info->authorName ?? $metas['article:author'] ?? $metas['author'] ?? '';
+
+        // Extrair data de publicação
+        $publishedTime = '';
+        if ($info->publishedTime) {
+            $publishedTime = $info->publishedTime->format('Y-m-d H:i:s');
+        } else if (!empty($metas['article:published_time'])) {
+            $publishedTime = $metas['article:published_time'];
+        }
+
+        // Extrair keywords
+        $keywords = [];
+        if (!empty($metas['keywords'])) {
+            $keywordString = is_array($metas['keywords'])
+                ? implode(',', $metas['keywords'])
+                : $metas['keywords'];
+            $keywords = array_filter(
+                array_map('trim', explode(',', $keywordString)),
+                fn($k) => !empty($k)
+            );
+        } else if (!empty($metas['article:tag'])) {
+            $tags = is_array($metas['article:tag'])
+                ? $metas['article:tag']
+                : [$metas['article:tag']];
+            $keywords = array_filter($tags, fn($k) => !empty($k));
+        }
+
+        return [
+            'title' => trim($title),
+            'description' => trim($description),
+            'image' => trim($image),
+            'url' => (string)$canonicalUrl,
+            'site_name' => trim($siteName),
+            'author' => trim($author),
+            'published_time' => trim($publishedTime),
+            'keywords' => array_values($keywords),
+            'cached_at' => $currentTimestamp,
+        ];
+    } catch (Throwable $e) {
+        // Em caso de erro, retornar estrutura padrão
+        return $defaultResponse;
     }
 }
 
 /**
- * Fetch and extract OpenGraph metadata from a URL.
+ * Get OpenGraph info with cache validation based on expiration days.
  *
- * @param string $uri URL to fetch metadata from
- * @return array Extracted OpenGraph metadata
- * @throws RuntimeException If the request fails or no metadata found
+ * @param string $url URL to fetch metadata from
+ * @param array $cache Current cache array (url => data)
+ * @param int|null $cacheDays Number of days before cache expires (null = use env var or default 30)
+ * @return array OpenGraph info (will fetch fresh if cache expired or missing)
  */
-function opengraph_fetch(string $uri): array
+function opengraph_get_cached_info(string $url, array $cache, ?int $cacheDays = null): array
 {
-    $html = curl_get_content($uri, [
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_USERAGENT => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
-    ]);
-
-    return opengraph_parse($html);
-}
-
-/**
- * Extract OpenGraph metadata from HTML content.
- *
- * @param string $html HTML content to parse
- * @return array Extracted OpenGraph metadata
- * @throws RuntimeException If no valid metadata found
- */
-function opengraph_parse(string $html): array
-{
-    $doc = new DOMDocument();
-    @$doc->loadHTML($html);
-
-    $tags = $doc->getElementsByTagName('meta');
-    if (!$tags || $tags->length === 0) {
-        throw new RuntimeException('No meta tags found in HTML');
+    // Obter dias de expiração do cache (variável de ambiente ou padrão)
+    if ($cacheDays === null) {
+        $cacheDays = (int)middag_get_env('OPENGRAPH_CACHE_DAYS', '30');
     }
 
-    $values = [];
-    $nonOgDescription = null;
+    $cacheExpirationSeconds = $cacheDays * 86400; // dias * segundos por dia
+    $currentTimestamp = time();
 
-    foreach ($tags as $tag) {
-        // Extract OpenGraph properties
-        if ($tag->hasAttribute('property') && str_starts_with($tag->getAttribute('property'), 'og:')) {
-            $key = strtr(substr($tag->getAttribute('property'), 3), '-', '_');
-            $values[$key] = $tag->getAttribute('content') ?: $tag->getAttribute('value');
-            continue;
-        }
+    // Verificar se existe cache para esta URL
+    if (isset($cache[$url]) && is_array($cache[$url])) {
+        $cachedData = $cache[$url];
 
-        // Capture non-OG description as fallback
-        if ($tag->hasAttribute('name') && $tag->getAttribute('name') === 'description') {
-            $nonOgDescription = $tag->getAttribute('content');
+        // Verificar se o cache tem timestamp e se ainda é válido
+        if (isset($cachedData['cached_at'])) {
+            $cacheAge = $currentTimestamp - $cachedData['cached_at'];
+
+            // Se o cache ainda não expirou, retornar dados em cache
+            if ($cacheAge < $cacheExpirationSeconds) {
+                return $cachedData;
+            }
         }
     }
 
-    // Fallback to page title
-    if (!isset($values['title'])) {
-        $titles = $doc->getElementsByTagName('title');
-        if ($titles->length > 0) {
-            $values['title'] = $titles->item(0)->textContent;
-        }
-    }
-
-    // Fallback to non-OG description
-    if (!isset($values['description']) && $nonOgDescription !== null) {
-        $values['description'] = $nonOgDescription;
-    }
-
-    // Fallback to image_src if og:image not present
-    if (!isset($values['image'])) {
-        $values = extract_image_src_fallback($doc, $values);
-    }
-
-    if (empty($values)) {
-        throw new RuntimeException('No OpenGraph metadata found');
-    }
-
-    return $values;
-}
-
-/**
- * Extract image using link rel="image_src" as fallback.
- *
- * @param DOMDocument $doc DOM document
- * @param array $values Current values array
- * @return array Updated values array
- */
-function extract_image_src_fallback(DOMDocument $doc, array $values): array
-{
-    $domxpath = new DOMXPath($doc);
-    $elements = $domxpath->query("//link[@rel='image_src']");
-
-    if ($elements->length > 0) {
-        $domattr = $elements->item(0)->attributes->getNamedItem('href');
-        if ($domattr) {
-            $values['image'] = $domattr->value;
-            $values['image_src'] = $domattr->value;
-        }
-    }
-
-    return $values;
+    // Cache não existe, expirou ou está inválido - buscar novos dados
+    return opengraph_fetch_info($url);
 }
 
 /**
