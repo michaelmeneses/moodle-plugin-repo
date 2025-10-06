@@ -17,6 +17,10 @@ jobs:
       COMPOSER_ALLOW_SUPERUSER: 1
       COMPOSER_PROCESS_TIMEOUT: 900
 
+      # Envs variables for Satis MIDDAG
+      SATIS_NAME: ${{ vars.SATIS_NAME }}
+      SATIS_URL: ${{ vars.SATIS_URL }}
+
       # Envs variables for S3 Satis
       S3_BUCKET: ${{ vars.S3_BUCKET }}
       S3_ACCESS_KEY_ID: ${{ vars.S3_ACCESS_KEY_ID }}
