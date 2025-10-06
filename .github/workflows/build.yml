@@ -32,10 +32,15 @@ jobs:
       S3_USE_PATH_STYLE_ENDPOINT: ${{ vars.S3_USE_PATH_STYLE_ENDPOINT }}
 
     steps:
-      - name: Install Composer & Git
+      - name: Install PHP extensions & tools
         run: |
-          apt-get update && apt-get install -y git unzip curl
+          apt-get update && apt-get install -y \
+            git unzip curl \
+            php8.2-zip php8.2-curl php8.2-mbstring php8.2-bcmath php8.2-intl \
+            php8.2-xml php8.2-dom php8.2-json
+
           curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+          php -m
 
       - name: Checkout source-code
         uses: actions/checkout@v4
