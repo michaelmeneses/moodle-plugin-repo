@@ -36,19 +36,39 @@ jobs:
       - name: Checkout source-code
         uses: actions/checkout@v4
 
-      - name: Composer install
-        run: composer install --no-dev --prefer-dist --optimize-autoloader
+      - name: Restore Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
 
-      - name: Create s3-satis.json
-        run: |
-          set -e
-          echo "Running composer run gen:s3-satis"
-          composer run gen:s3-satis
-          echo "Deleting the vendor directory to avoid conflicts"
-          rm -rf vendor
+      - name: Restore VCS mirrors cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer/vcs
+          key: satis-vcs-${{ runner.os }}
+          restore-keys: |
+            satis-vcs-${{ runner.os }}
+
+      - name: Restore S3-Satis cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/s3-satis-generator
+          key: s3-satis-${{ runner.os }}
+          restore-keys: |
+            s3-satis-${{ runner.os }}
 
       - name: Build s3-satis
         run: |
           set -e
-          echo "Running composer run build:s3-satis"
-          composer run build:s3-satis
+          echo "Running composer run full:s3-satis"
+          composer run full:s3-satis
+
+      - name: Show cache state summary
+        run: |
+          echo "Cache states:"
+          du -sh ~/.composer/cache || true
+          du -sh ~/.cache/composer/vcs || true
+          du -sh /tmp/s3-satis-generator || true

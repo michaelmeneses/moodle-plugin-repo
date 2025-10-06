@@ -72,6 +72,7 @@ if ($mode === 's3-satis') {
         'plugins' => [
             'cache' => [
                 'enabled' => true,
+                'path' => '/tmp/s3-satis-generator',
             ],
             'skip-step-after-hook' => [
                 'enabled' => true,

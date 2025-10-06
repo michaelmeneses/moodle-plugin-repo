@@ -39,7 +39,9 @@
             "@build:satis"
         ],
         "full:s3-satis": [
+            "composer install",
             "@gen:s3-satis",
+            "rm -rf vendor",
             "@build:s3-satis"
         ]
     },
