@@ -66,6 +66,146 @@ function normalize_component(string $component, array $allcomponents): array
     return [$type, $plugin];
 }
 
+
+/**
+ * Get or create S3 client instance (singleton pattern).
+ *
+ * @return \Aws\S3\S3Client
+ * @throws RuntimeException If S3 configuration is missing
+ */
+function get_s3_client(): \Aws\S3\S3Client
+{
+    static $client = null;
+
+    if ($client === null) {
+        $endpoint = middag_get_env('S3_ENDPOINT');
+        $region = middag_get_env('S3_REGION', middag_get_env('AWS_REGION', 'us-east-1'));
+        $accessKey = middag_get_env('S3_ACCESS_KEY_ID', middag_get_env('AWS_ACCESS_KEY_ID'));
+        $secretKey = middag_get_env('S3_SECRET_ACCESS_KEY', middag_get_env('AWS_SECRET_ACCESS_KEY'));
+
+        if (!$accessKey || !$secretKey) {
+            throw new RuntimeException('Missing S3 credentials: ensure S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are set');
+        }
+
+        $config = [
+            'region' => $region,
+            'end' => $region,
+            'version' => 'latest',
+            'credentials' => new Aws\Credentials\Credentials($accessKey, $secretKey),
+        ];
+
+        // Se um endpoint customizado for fornecido (ex: Cloudflare R2), use-o
+        if ($endpoint) {
+            $config['endpoint'] = $endpoint;
+            $config['use_path_style_endpoint'] = true;
+        }
+
+        $client = new \Aws\S3\S3Client($config);
+    }
+
+    return $client;
+}
+
+/**
+ * Get an object from S3-compatible storage. Returns null if not found (404).
+ *
+ * @param string $key Object key
+ * @return string|null Body or null if not found
+ * @throws RuntimeException If configuration is invalid
+ */
+function s3_get_object(string $key): ?string
+{
+    try {
+        $client = get_s3_client();
+        $bucket = middag_get_env('S3_BUCKET');
+
+        if (!$bucket) {
+            throw new RuntimeException('Missing S3_BUCKET configuration');
+        }
+
+        $result = $client->getObject([
+            'Bucket' => $bucket,
+            'Key' => $key,
+        ]);
+
+        $body = $result['Body']->getContents();
+
+        // Validar que o conteúdo não está vazio
+        if (empty($body)) {
+            error_log("S3 GET warning: Object '{$key}' exists but is empty");
+            return null;
+        }
+
+        return $body;
+    } catch (\Aws\S3\Exception\S3Exception $e) {
+        $errorCode = $e->getAwsErrorCode();
+
+        // Se o objeto não foi encontrado, retorne null silenciosamente
+        if ($errorCode === 'NoSuchKey' || $errorCode === 'NoSuchBucket') {
+            return null;
+        }
+
+        // Para outros erros S3, fazer log mas não quebrar
+        error_log("S3 GET error for '{$key}': [{$errorCode}] " . $e->getMessage());
+        return null;
+    } catch (Throwable $e) {
+        // Erros de configuração ou conectividade
+        error_log("S3 GET exception for '{$key}': " . $e->getMessage());
+        throw $e;
+    }
+}
+
+/**
+ * Put an object to S3-compatible storage. Returns true on success.
+ *
+ * @param string $key Object key
+ * @param string $content Content to upload
+ * @param string $contentType Content-Type header
+ * @return bool True on success, false on failure
+ * @throws RuntimeException If configuration is invalid
+ */
+function s3_put_object(string $key, string $content, string $contentType = 'application/octet-stream'): bool
+{
+    try {
+        $client = get_s3_client();
+        $bucket = middag_get_env('S3_BUCKET');
+
+        if (!$bucket) {
+            throw new RuntimeException('Missing S3_BUCKET configuration');
+        }
+
+        // Validar que o conteúdo não está vazio
+        if (empty($content)) {
+            error_log("S3 PUT warning: Attempting to upload empty content for '{$key}'");
+            return false;
+        }
+
+        $result = $client->putObject([
+            'Bucket' => $bucket,
+            'Key' => $key,
+            'Body' => $content,
+            'ContentType' => $contentType,
+            'CacheControl' => 'max-age=3600', // Cache por 1 hora
+        ]);
+
+        // Verificar se o upload foi bem-sucedido verificando o ETag
+        if (isset($result['ETag'])) {
+            return true;
+        }
+
+        error_log("S3 PUT warning: Upload completed but no ETag returned for '{$key}'");
+        return false;
+    } catch (\Aws\S3\Exception\S3Exception $e) {
+        $errorCode = $e->getAwsErrorCode();
+        error_log("S3 PUT error for '{$key}': [{$errorCode}] " . $e->getMessage());
+        return false;
+    } catch (Throwable $e) {
+        // Erros de configuração ou conectividade
+        error_log("S3 PUT exception for '{$key}': " . $e->getMessage());
+        throw $e;
+    }
+}
+
 /**
  * Fetch complete OpenGraph information from a URL using embed/embed library.
  *
@@ -205,7 +345,7 @@ function opengraph_get_cached_info(string $url, array $cache, ?int $cacheDays = 
     $currentTimestamp = time();
 
     // Verificar se existe cache para esta URL
-    if (isset($cache[$url]) && is_array($cache[$url])) {
+    if (isset($cache[$url]) && is_array($cache[$url]) && !empty($cache[$url]['title'])) {
         $cachedData = $cache[$url];
 
         // Verificar se o cache tem timestamp e se ainda é válido

@@ -4,6 +4,7 @@ use JsonSchema\Validator;
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/util.php';
+require_once __DIR__ . '/opengraph_cache.php';
 
 const MOODLE_LATEST = "5.0";
 const MOODLE_LATEST_BEFORE = "4.5";
@@ -18,11 +19,8 @@ $mode = 'satis'; // 'satis' or 's3-satis'
 
 $cacheFile = __DIR__ . '/opengraph_cache.json';
 
-// Init cache for OpenGraph
-if (!file_exists($cacheFile)) {
-    file_put_contents($cacheFile, json_encode([]));
-}
-$opengraphCache = json_decode(file_get_contents($cacheFile), true);
+// Load OpenGraph cache from S3 or local file
+$opengraphCache = opengraph_cache_load($cacheFile);
 
 if (!empty($_SERVER['argv'])) {
     $rawoptions = $_SERVER['argv'];
@@ -291,8 +289,8 @@ if (!$validator->isValid()) {
     }
 }
 
-// Save OpenGraph cache
-file_put_contents($cacheFile, json_encode($opengraphCache));
+// Save OpenGraph cache to local file and S3
+opengraph_cache_save($opengraphCache, $cacheFile);
 
 // Save satis.json
 file_put_contents($satisfile, json_encode($satisjson));
