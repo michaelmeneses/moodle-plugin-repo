@@ -39,8 +39,16 @@ jobs:
       - name: Composer install
         run: composer install --no-dev --prefer-dist --optimize-autoloader
 
+      - name: Create s3-satis.json
+        run: |
+          set -e
+          echo "Running composer run gen:s3-satis"
+          composer run gen:s3-satis
+          echo "Deleting the vendor directory to avoid conflicts"
+          rm -rf vendor
+
       - name: Build s3-satis
         run: |
           set -e
-          echo "Running composer run full:s3-satis"
-          composer run full:s3-satis
+          echo "Running composer run build:s3-satis"
+          composer run build:s3-satis
