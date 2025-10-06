@@ -30,6 +30,9 @@ jobs:
       S3_USE_PATH_STYLE_ENDPOINT: ${{ vars.S3_USE_PATH_STYLE_ENDPOINT }}
 
     steps:
+      - name: Install system dependencies
+        run: apt-get update && apt-get install -y git
+
       - name: Checkout source-code
         uses: actions/checkout@v4
 
