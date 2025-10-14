@@ -242,6 +242,10 @@ foreach ($coremaxversions as $major => $max) {
             $filename = "moodle-$major.zip";
         }
         $url = $corebase . "/$directory/$filename";
+        if ($major === '5.0' && $i === 0) {
+            // Special case for Moodle 5.0
+            $url = 'https://satis.middag.com.br/dist/moodle/moodle/moodle-moodle-5.0.0.zip';
+        }
         $moodles['package'][] = [
             'name' => 'moodle/moodle',
             'version' => $versionno,
