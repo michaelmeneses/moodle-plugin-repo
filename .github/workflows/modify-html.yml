@@ -1,0 +1,70 @@
+name: Modify HTML
+
+on:
+  workflow_dispatch:
+
+jobs:
+  modify-html:
+    name: Test HTML Modification
+    runs-on: ubuntu-latest
+
+    container:
+      image: middagtec/image-bitbucket-ci:v5-php82
+      options: --user root
+
+    env:
+      # Envs for S3 Satis (Cloudflare R2)
+      S3_BUCKET: ${{ vars.S3_BUCKET }}
+      S3_ACCESS_KEY_ID: ${{ vars.S3_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+      S3_REGION: ${{ vars.S3_REGION }}
+      S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+      S3_USE_PATH_STYLE_ENDPOINT: ${{ vars.S3_USE_PATH_STYLE_ENDPOINT }}
+
+    steps:
+      - name: Modify index.html with custom CSS
+        run: |
+          set -e
+          if ! command -v aws &> /dev/null; then
+            echo ">> AWS CLI not found. Installing..."
+            apt-get update
+            apt-get install -y awscli
+          else
+            echo ">> AWS CLI already installed"
+          fi
+          aws --version
+
+          echo ">> Downloading index.html from R2"
+
+          # Configure AWS CLI to use Cloudflare R2 endpoint
+          export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
+          export AWS_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY}"
+          export AWS_DEFAULT_REGION="${S3_REGION}"
+
+          # Create temporary directory
+          TEMP_DIR=$(mktemp -d)
+          INDEX_FILE="$TEMP_DIR/index.html"
+
+          # Download index.html from R2
+          if aws s3 cp "s3://${S3_BUCKET}/index.html" "$INDEX_FILE" \
+            --endpoint-url="${S3_ENDPOINT}" \
+            $([ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ] && echo "--force-path-style"); then
+
+            echo ">> Adding custom CSS to index.html"
+            sed -i '/<head>/a <style>.field-required-by {display: none !important;}</style>' "$INDEX_FILE"
+
+            echo ">> Uploading modified index.html back to R2"
+            aws s3 cp "$INDEX_FILE" "s3://${S3_BUCKET}/index.html" \
+              --endpoint-url="${S3_ENDPOINT}" \
+              --content-type "text/html" \
+              $([ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ] && echo "--force-path-style")
+
+            echo "Inline CSS successfully added!"
+
+            # Clean up temporary file
+            rm -rf "$TEMP_DIR"
+          else
+            echo "Error: index.html file not found in bucket ${S3_BUCKET}. Skipping CSS addition."
+            rm -rf "$TEMP_DIR"
+            exit 0
+          fi
