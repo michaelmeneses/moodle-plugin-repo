@@ -44,14 +44,18 @@ jobs:
           export AWS_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY}"
           export AWS_DEFAULT_REGION="${S3_REGION}"
 
+          # Configure path-style access for R2 (AWS CLI v2)
+          if [ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ]; then
+            export AWS_S3_USE_PATH_STYLE_ENDPOINT=true
+          fi
+
           # Create temporary directory
           TEMP_DIR=$(mktemp -d)
           INDEX_FILE="$TEMP_DIR/index.html"
 
           # Download index.html from R2
           if aws s3 cp "s3://${S3_BUCKET}/index.html" "$INDEX_FILE" \
-            --endpoint-url="${S3_ENDPOINT}" \
-            $([ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ] && echo "--force-path-style"); then
+            --endpoint-url="${S3_ENDPOINT}"; then
 
             echo ">> Adding custom CSS to index.html"
             sed -i '/<head>/a <style>.field-required-by {display: none !important;}</style>' "$INDEX_FILE"
@@ -59,8 +63,7 @@ jobs:
             echo ">> Uploading modified index.html back to R2"
             aws s3 cp "$INDEX_FILE" "s3://${S3_BUCKET}/index.html" \
               --endpoint-url="${S3_ENDPOINT}" \
-              --content-type "text/html" \
-              $([ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ] && echo "--force-path-style")
+              --content-type "text/html"
 
             echo "Inline CSS successfully added!"
 
