@@ -66,6 +66,59 @@ jobs:
           echo "Running composer run full:s3-satis"
           composer run full:s3-satis
 
+      - name: Modify index.html with custom CSS
+        run: |
+          set -e
+          if ! command -v aws &> /dev/null; then
+            echo ">> AWS CLI not found. Installing AWS CLI v2..."
+            cd /tmp
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip -q awscliv2.zip
+            ./aws/install
+            rm -rf awscliv2.zip aws
+          else
+            echo ">> AWS CLI already installed"
+          fi
+          aws --version
+
+          echo ">> Downloading index.html from R2"
+
+          # Configure AWS CLI to use Cloudflare R2 endpoint
+          export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
+          export AWS_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY}"
+          export AWS_DEFAULT_REGION="${S3_REGION}"
+
+          # Configure path-style access for R2 (AWS CLI v2)
+          if [ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ]; then
+            export AWS_S3_USE_PATH_STYLE_ENDPOINT=true
+          fi
+
+          # Create temporary directory
+          TEMP_DIR=$(mktemp -d)
+          INDEX_FILE="$TEMP_DIR/index.html"
+
+          # Download index.html from R2
+          if aws s3 cp "s3://${S3_BUCKET}/index.html" "$INDEX_FILE" \
+            --endpoint-url="${S3_ENDPOINT}"; then
+
+            echo ">> Adding custom CSS to index.html"
+            sed -i '/<head>/a <style>.field-required-by {display: none !important;}</style>' "$INDEX_FILE"
+
+            echo ">> Uploading modified index.html back to R2"
+            aws s3 cp "$INDEX_FILE" "s3://${S3_BUCKET}/index.html" \
+              --endpoint-url="${S3_ENDPOINT}" \
+              --content-type "text/html"
+
+            echo "Inline CSS successfully added!"
+
+            # Clean up temporary file
+            rm -rf "$TEMP_DIR"
+          else
+            echo "Error: index.html file not found in bucket ${S3_BUCKET}. Skipping CSS addition."
+            rm -rf "$TEMP_DIR"
+            exit 0
+          fi
+
       - name: Show cache state summary
         run: |
           echo "Cache states:"
