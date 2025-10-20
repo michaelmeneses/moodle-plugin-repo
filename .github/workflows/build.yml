@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "0 2 * * *"
   workflow_dispatch:
+    inputs:
+      fix_checksums:
+        description: "Run s3-satis with --fix-checksums to correct packages checksums"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -63,8 +69,13 @@ jobs:
       - name: Build s3-satis
         run: |
           set -e
-          echo "Running composer run full:s3-satis"
-          composer run full:s3-satis
+          if [ "${{ github.event.inputs.fix_checksums }}" = "true" ]; then
+            echo "Running composer run full:s3-satis:fix-checksums"
+            composer run full:s3-satis:fix-checksums
+          else
+            echo "Running composer run full:s3-satis"
+            composer run full:s3-satis
+          fi
 
       - name: Modify index.html with custom CSS
         run: |
