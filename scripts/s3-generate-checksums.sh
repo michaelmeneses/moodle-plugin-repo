@@ -42,6 +42,14 @@
 #
 set -euo pipefail
 
+# Error handler for debugging
+error_handler() {
+  local line_no=$1
+  err "Script failed at line $line_no"
+  exit 1
+}
+trap 'error_handler $LINENO' ERR
+
 PREFIX=${PREFIX:-dist/}
 FILTER_EXTS=${FILTER_EXTS:-"zip tar"}
 DRY_RUN=${DRY_RUN:-0}
@@ -206,8 +214,14 @@ compute_and_upload_checksum() {
 }
 
 fix_empty_hash_checksums() {
+  log "Starting fix_empty_hash_checksums..."
+
   # Ensure TMP_CHECKSUMS directory exists
-  mkdir -p "$TMP_CHECKSUMS"
+  mkdir -p "$TMP_CHECKSUMS" || {
+    err "Failed to create TMP_CHECKSUMS directory: $TMP_CHECKSUMS"
+    return 1
+  }
+  log "TMP_CHECKSUMS directory confirmed: $TMP_CHECKSUMS"
 
   # Download entire .checksums subtree for the PREFIX locally and fix empty-hash files
   if [[ "$PERSISTENT_CACHE" == "false" ]]; then
@@ -219,8 +233,11 @@ fix_empty_hash_checksums() {
   fi
 
   # Check if directory has any files
-  local file_count
-  file_count=$(find "$TMP_CHECKSUMS" -type f -name '*.sha1' 2>/dev/null | wc -l)
+  log "Checking for .sha1 files in $TMP_CHECKSUMS..."
+  local file_count=0
+  file_count=$(find "$TMP_CHECKSUMS" -type f -name '*.sha1' 2>/dev/null | wc -l | tr -d ' ') || file_count=0
+  log "Found $file_count .sha1 files"
+
   if [[ "$file_count" -eq 0 ]]; then
     log "No checksum files found in $TMP_CHECKSUMS"
     return 0
@@ -258,6 +275,7 @@ fix_empty_hash_checksums() {
 }
 
 generate_missing_checksums() {
+  log "Starting generate_missing_checksums..."
   log "Listing inventories for '$PREFIX' and matching .checksums..."
 
   # Build list of dist keys (filtered by extension)
@@ -269,6 +287,8 @@ generate_missing_checksums() {
   : > "$dist_keys_file"
   : > "$checksummed_keys_file"
 
+  log "Fetching list of dist/ keys from S3..."
+
   list_dist_keys | while IFS= read -r key; do
     [[ -z "$key" ]] && continue
     [[ "$key" == */ ]] && continue
@@ -277,7 +297,12 @@ generate_missing_checksums() {
     fi
   done
 
+  local dist_count=0
+  dist_count=$(wc -l < "$dist_keys_file" | tr -d ' ') || dist_count=0
+  log "Found $dist_count dist files with allowed extensions"
+
   # Prefer deriving from local synced files to avoid another remote roundtrip
+  log "Building list of existing checksums..."
   if [[ -d "$TMP_CHECKSUMS" ]]; then
     local checksum_file_count
     checksum_file_count=$(find "$TMP_CHECKSUMS" -type f -name '*.sha1' 2>/dev/null | wc -l)
