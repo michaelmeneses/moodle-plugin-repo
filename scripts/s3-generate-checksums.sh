@@ -98,12 +98,17 @@ AWS_ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT")
 
 # Configure path-style addressing if requested
 TMP_AWS_CONFIG=""
+PERSISTENT_CACHE=false
 cleanup() {
   if [[ -n "$TMP_AWS_CONFIG" && -f "$TMP_AWS_CONFIG" ]]; then
     rm -f "$TMP_AWS_CONFIG" || true
   fi
   if [[ -d "$TMP_WORK" ]]; then
     rm -rf "$TMP_WORK" || true
+  fi
+  # Don't remove TMP_CHECKSUMS if it's the persistent cache
+  if [[ "$PERSISTENT_CACHE" == "false" && -d "$TMP_CHECKSUMS" && "$TMP_CHECKSUMS" != "/tmp/s3-satis-generator/.checksums" ]]; then
+    rm -rf "$TMP_CHECKSUMS" || true
   fi
 }
 trap cleanup EXIT INT TERM
@@ -120,10 +125,22 @@ EOF
 fi
 
 # Working directories
-TMP_WORK=$(mktemp -d)
-TMP_CHECKSUMS="$TMP_WORK/checksums"
-TMP_DOWNLOADS="$TMP_WORK/downloads"
-mkdir -p "$TMP_CHECKSUMS" "$TMP_DOWNLOADS"
+# Use /tmp/s3-satis-generator/.checksums if available (from GitHub Actions cache)
+if [[ -d "/tmp/s3-satis-generator/.checksums" ]]; then
+  log "Using existing checksums cache at /tmp/s3-satis-generator/.checksums"
+  TMP_CHECKSUMS="/tmp/s3-satis-generator/.checksums"
+  TMP_WORK=$(mktemp -d)
+  TMP_DOWNLOADS="$TMP_WORK/downloads"
+  mkdir -p "$TMP_DOWNLOADS"
+  # Don't clean up TMP_CHECKSUMS on exit since it's the persistent cache
+  PERSISTENT_CACHE=true
+else
+  TMP_WORK=$(mktemp -d)
+  TMP_CHECKSUMS="$TMP_WORK/checksums"
+  TMP_DOWNLOADS="$TMP_WORK/downloads"
+  mkdir -p "$TMP_CHECKSUMS" "$TMP_DOWNLOADS"
+  PERSISTENT_CACHE=false
+fi
 
 # Helpers
 s3_object_exists() {
@@ -183,9 +200,13 @@ compute_and_upload_checksum() {
 
 fix_empty_hash_checksums() {
   # Download entire .checksums subtree for the PREFIX locally and fix empty-hash files
-  log "Syncing .checksums/${PREFIX} to local temp dir to check for empty hashes..."
-  # If the source path doesn't exist, allow sync to no-op
-  aws s3 sync "s3://$S3_BUCKET/.checksums/${PREFIX}" "$TMP_CHECKSUMS" "${AWS_ENDPOINT_ARGS[@]}" >/dev/null 2>&1 || true
+  if [[ "$PERSISTENT_CACHE" == "false" ]]; then
+    log "Syncing .checksums/${PREFIX} to local temp dir to check for empty hashes..."
+    # If the source path doesn't exist, allow sync to no-op
+    aws s3 sync "s3://$S3_BUCKET/.checksums/${PREFIX}" "$TMP_CHECKSUMS" "${AWS_ENDPOINT_ARGS[@]}" >/dev/null 2>&1 || true
+  else
+    log "Using persistent cache at $TMP_CHECKSUMS (skipping S3 sync)"
+  fi
 
   if [[ ! -d "$TMP_CHECKSUMS" ]]; then
     return 0
