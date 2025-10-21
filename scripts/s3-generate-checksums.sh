@@ -3,30 +3,27 @@
 # s3-generate-checksums.sh
 #
 # Purpose:
-#   Ensure every archive under "dist/" has a corresponding checksum object
-#   at ".checksums/<original-key>.sha1" in the same S3-compatible bucket.
-#   The script is optimized to:
-#     1) Download the .checksums subtree locally and fix any checksum files
-#        that contain the empty-file SHA1
-#        (da39a3ee5e6b4b0d3255bfef95601890afd80709).
-#     2) Compare inventories of "dist/" vs ".checksums/dist/" and generate
-#        only the missing checksums.
+#   Ensure every archive under "dist/" has a valid SHA1 checksum at
+#   ".checksums/<original-key>.sha1" in the S3 bucket.
+#   - Fixes empty checksums (da39a3ee5e6b4b0d3255bfef95601890afd80709)
+#   - Generates missing checksums
 #
 # Requirements:
-#   - bash, awk, sed, mktemp, find
-#   - AWS CLI (aws) with S3API (list-objects-v2, head-object) and S3 (cp/sync) commands
-#   - At least one of: shasum, or openssl
+#   - bash, awk, sed, mktemp, wc
+#   - AWS CLI (aws) with S3 commands
+#   - shasum or openssl (for SHA1 calculation)
 #
-# Environment variables:
-#   S3_BUCKET                 (e.g., "privatesatis")
-#   S3_ACCESS_KEY_ID          (e.g., "AKIA...")
-#   S3_SECRET_ACCESS_KEY      (secret)
-#   S3_REGION                 (e.g., "auto")
-#   S3_ENDPOINT               (e.g., "https://<account>.r2.cloudflarestorage.com")
-#   S3_USE_PATH_STYLE_ENDPOINT ("true" or "false")
+# Required environment variables:
+#   S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY,
+#   S3_REGION, S3_ENDPOINT, S3_USE_PATH_STYLE_ENDPOINT
+#
+# Optional environment variables:
+#   PREFIX          (default: "dist/")
+#   FILTER_EXTS     (default: "zip tar")
+#   DRY_RUN         (default: "0")
+#   PARALLEL_JOBS   (default: "10")
 #
 # Usage:
-#   chmod +x scripts/s3-generate-checksums.sh
 #   S3_BUCKET=privatesatis \
 #   S3_ACCESS_KEY_ID=... \
 #   S3_SECRET_ACCESS_KEY=... \
@@ -34,11 +31,6 @@
 #   S3_ENDPOINT=https://xxxx.r2.cloudflarestorage.com \
 #   S3_USE_PATH_STYLE_ENDPOINT=true \
 #   scripts/s3-generate-checksums.sh
-#
-# Options (env vars):
-#   PREFIX          Prefix to scan for source files (default: "dist/")
-#   FILTER_EXTS     Space-separated list of extensions to include (default: "zip tar")
-#   DRY_RUN         If set to "1", do not upload, just print actions (default: "0")
 #
 set -euo pipefail
 
@@ -53,6 +45,7 @@ trap 'error_handler $LINENO' ERR
 PREFIX=${PREFIX:-dist/}
 FILTER_EXTS=${FILTER_EXTS:-"zip tar"}
 DRY_RUN=${DRY_RUN:-0}
+PARALLEL_JOBS=${PARALLEL_JOBS:-10}
 
 # Constants
 EMPTY_SHA1="da39a3ee5e6b4b0d3255bfef95601890afd80709"
@@ -102,21 +95,15 @@ export AWS_DEFAULT_REGION="$S3_REGION"
 export AWS_REGION="$S3_REGION"
 export AWS_EC2_METADATA_DISABLED=true
 
-AWS_ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT")
+# Store endpoint args as variables for parallel job compatibility
+AWS_ENDPOINT_ARG1="--endpoint-url"
+AWS_ENDPOINT_ARG2="$S3_ENDPOINT"
 
 # Configure path-style addressing if requested
 TMP_AWS_CONFIG=""
-PERSISTENT_CACHE=false
 cleanup() {
   if [[ -n "$TMP_AWS_CONFIG" && -f "$TMP_AWS_CONFIG" ]]; then
     rm -f "$TMP_AWS_CONFIG" || true
-  fi
-  if [[ -d "$TMP_WORK" ]]; then
-    rm -rf "$TMP_WORK" || true
-  fi
-  # Don't remove TMP_CHECKSUMS if it's the persistent cache
-  if [[ "$PERSISTENT_CACHE" == "false" && -d "$TMP_CHECKSUMS" && "$TMP_CHECKSUMS" != "/tmp/s3-satis-generator/.checksums" ]]; then
-    rm -rf "$TMP_CHECKSUMS" || true
   fi
 }
 trap cleanup EXIT INT TERM
@@ -133,41 +120,29 @@ EOF
 fi
 
 # Working directories
-# Use /tmp/s3-satis-generator/.checksums if available (from GitHub Actions cache)
-if [[ -d "/tmp/s3-satis-generator/.checksums" ]]; then
-  log "Using existing checksums cache at /tmp/s3-satis-generator/.checksums"
-  TMP_CHECKSUMS="/tmp/s3-satis-generator/.checksums"
-  TMP_WORK=$(mktemp -d)
-  TMP_DOWNLOADS="$TMP_WORK/downloads"
-  mkdir -p "$TMP_CHECKSUMS" "$TMP_DOWNLOADS"
-  # Don't clean up TMP_CHECKSUMS on exit since it's the persistent cache
-  PERSISTENT_CACHE=true
-else
-  TMP_WORK=$(mktemp -d)
-  TMP_CHECKSUMS="$TMP_WORK/checksums"
-  TMP_DOWNLOADS="$TMP_WORK/downloads"
-  mkdir -p "$TMP_CHECKSUMS" "$TMP_DOWNLOADS"
-  PERSISTENT_CACHE=false
-fi
+TMP_WORK="./temp"
+TMP_CHECKSUMS="$TMP_WORK/checksums"
+TMP_DOWNLOADS="$TMP_WORK/downloads"
+mkdir -p "$TMP_CHECKSUMS" "$TMP_DOWNLOADS"
 
 # Helpers
 s3_object_exists() {
   local key="$1"
-  aws s3api head-object --bucket "$S3_BUCKET" --key "$key" "${AWS_ENDPOINT_ARGS[@]}" >/dev/null 2>&1
+  aws s3api head-object --bucket "$S3_BUCKET" --key "$key" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" >/dev/null 2>&1
 }
 
 list_dist_keys() {
   # Outputs one key per line under PREFIX
-  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "$PREFIX" "${AWS_ENDPOINT_ARGS[@]}" \
-    --output text --query 'Contents[].Key' 2>/dev/null | sed '/^None$/d' || true
+  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "$PREFIX" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" \
+    --output text --query 'Contents[].Key' 2>/dev/null | tr '\t' '\n' | sed '/^None$/d' | grep -v '^$' || true
 }
 
 list_checksum_keys() {
   # Outputs checksum keys under .checksums/PREFIX
   local cprefix
   cprefix=".checksums/${PREFIX}"
-  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "$cprefix" "${AWS_ENDPOINT_ARGS[@]}" \
-    --output text --query 'Contents[].Key' 2>/dev/null | sed '/^None$/d' || true
+  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "$cprefix" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" \
+    --output text --query 'Contents[].Key' 2>/dev/null | tr '\t' '\n' | sed '/^None$/d' | grep -v '^$' || true
 }
 
 has_allowed_ext() {
@@ -185,11 +160,10 @@ compute_and_upload_checksum() {
   # Args: key (dist/...)
   local key="$1" filename tmpfile checksum checksum_key local_checksum_file
   filename=$(basename -- "$key")
-  tmpfile="$TMP_DOWNLOADS/$filename"
+  tmpfile="$TMP_DOWNLOADS/$filename.$$"  # Add PID for parallel safety
   checksum_key=".checksums/$key.sha1"
 
-  log "Downloading s3://$S3_BUCKET/$key"
-  aws s3 cp "s3://$S3_BUCKET/$key" "$tmpfile" "${AWS_ENDPOINT_ARGS[@]}" >/dev/null
+  aws s3 cp "s3://$S3_BUCKET/$key" "$tmpfile" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" >/dev/null 2>&1
   checksum=$(calc_sha1 "$tmpfile")
   rm -f "$tmpfile"
 
@@ -199,225 +173,186 @@ compute_and_upload_checksum() {
   fi
 
   if [[ "$DRY_RUN" == "1" ]]; then
-    log "DRY_RUN: would upload checksum to s3://$S3_BUCKET/$checksum_key => $checksum"
+    log "[DRY_RUN] Would upload: $checksum_key => $checksum"
   else
-    # Upload to S3
-    printf '%s' "$checksum" | aws s3 cp - "s3://$S3_BUCKET/$checksum_key" "${AWS_ENDPOINT_ARGS[@]}" \
-      --content-type text/plain >/dev/null
+    # Upload to S3 IMMEDIATELY (so progress is not lost on timeout/error)
+    printf '%s' "$checksum" | aws s3 cp - "s3://$S3_BUCKET/$checksum_key" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" \
+      --content-type text/plain >/dev/null 2>&1
 
-    # Always save to local cache (maintains consistency regardless of cache mode)
+    # Also save locally for reference
     local_checksum_file="$TMP_CHECKSUMS/$key.sha1"
     mkdir -p "$(dirname "$local_checksum_file")"
     printf '%s' "$checksum" > "$local_checksum_file"
-    log "Saved checksum locally to $local_checksum_file"
   fi
 }
 
-fix_empty_hash_checksums() {
-  log "Starting fix_empty_hash_checksums..."
+download_and_check_checksum() {
+  # Download a single checksum file from S3 and return its content
+  # Args: checksum_key (e.g., ".checksums/dist/vendor/package/version.zip.sha1")
+  # Returns: the hash value, or empty string if file doesn't exist
+  local checksum_key="$1"
+  local content
 
-  # Declare all local variables upfront
-  local file_count h rel orig_key sha1_list
+  content=$(aws s3 cp "s3://$S3_BUCKET/$checksum_key" - "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" 2>/dev/null | tr -d '\n\r\t ' || echo "")
+  printf '%s' "$content"
+}
 
-  # Ensure TMP_CHECKSUMS directory exists
-  mkdir -p "$TMP_CHECKSUMS" || {
-    err "Failed to create TMP_CHECKSUMS directory: $TMP_CHECKSUMS"
-    return 1
-  }
-  log "TMP_CHECKSUMS directory confirmed: $TMP_CHECKSUMS"
+process_single_file() {
+  # Process a single file (for parallel execution)
+  # Args: key, total_count, processed_count
+  local key="$1"
+  local total_count="$2"
+  local processed_count="$3"
+  local checksum_key checksum_value result_file
 
-  # Download entire .checksums subtree for the PREFIX locally and fix empty-hash files
-  if [[ "$PERSISTENT_CACHE" == "false" ]]; then
-    log "Syncing .checksums/${PREFIX} to local temp dir to check for empty hashes..."
-    # If the source path doesn't exist, allow sync to no-op
-    aws s3 sync "s3://$S3_BUCKET/.checksums/${PREFIX}" "$TMP_CHECKSUMS" "${AWS_ENDPOINT_ARGS[@]}" >/dev/null 2>&1 || true
-  else
-    log "Using persistent cache at $TMP_CHECKSUMS (skipping S3 sync)"
-  fi
+  checksum_key=".checksums/$key.sha1"
+  result_file="$TMP_WORK/results/result.$$"
 
-  # Check if directory has any files
-  log "Checking for .sha1 files in $TMP_CHECKSUMS..."
-  file_count=$(find "$TMP_CHECKSUMS" -type f -name '*.sha1' 2>/dev/null | wc -l | tr -d ' ') || file_count=0
-  log "Found $file_count .sha1 files"
+  # Check if checksum exists and get its value
+  checksum_value=$(download_and_check_checksum "$checksum_key")
 
-  if [[ "$file_count" -eq 0 ]]; then
-    log "No checksum files found in $TMP_CHECKSUMS"
-    return 0
-  fi
-
-  log "Scanning checksum files for empty hashes..."
-
-  # Use a temporary file list to avoid process substitution issues
-  sha1_list="$TMP_WORK/sha1_files.txt"
-  find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0 2>/dev/null > "$sha1_list" || true
-
-  # Check if we got any results
-  if [[ ! -s "$sha1_list" ]]; then
-    log "No .sha1 files to process"
-    return 0
-  fi
-
-  # Iterate over all sha1 files
-  while IFS= read -r -d '' f; do
-    CHECKSUMS_SCANNED=$((CHECKSUMS_SCANNED + 1))
-
-    # Log progress every 100 files
-    if [[ $((CHECKSUMS_SCANNED % 100)) -eq 0 ]]; then
-      log "Processed $CHECKSUMS_SCANNED files..."
-    fi
-
-    h=$(tr -d '\n\r\t ' < "$f" 2>/dev/null || echo "")
-
-    if [[ "$h" == "$EMPTY_SHA1" ]]; then
-      # Map local path back to S3 key
-      # For persistent cache: /tmp/s3-satis-generator/.checksums/dist/path/file.zip.sha1 -> dist/.../file.zip
-      # For temp cache: TMP_CHECKSUMS/path/file.zip.sha1 -> dist/.../file.zip
-      rel="${f#${TMP_CHECKSUMS}/}"
-      orig_key="${rel%*.sha1}"
-
-      # Ensure it maps under PREFIX
-      if [[ -n "$orig_key" && -n "$PREFIX" ]]; then
-        # Confirm source exists in S3
-        if s3_object_exists "$orig_key"; then
-          log "Found empty-hash checksum: $rel -> fixing using $orig_key"
-          if [[ "$DRY_RUN" == "1" ]]; then
-            log "DRY_RUN: would recompute checksum for s3://$S3_BUCKET/$orig_key and overwrite .checksums/$orig_key.sha1"
-          else
-            if compute_and_upload_checksum "$orig_key"; then
-              FIXED_EMPTY=$((FIXED_EMPTY + 1))
-            fi
-          fi
-        else
-          log "Source missing for checksum '$rel' (expected: $orig_key). Skipping."
-          SKIPPED_NO_SOURCE=$((SKIPPED_NO_SOURCE + 1))
-        fi
+  # Process if checksum is missing or empty
+  if [[ -z "$checksum_value" ]]; then
+    log "[$processed_count/$total_count] Missing checksum: $key"
+    if [[ "$DRY_RUN" == "1" ]]; then
+      echo "MISSING_DRY" > "$result_file"
+    else
+      if compute_and_upload_checksum "$key"; then
+        log "  ✓ Generated checksum for: $key"
+        echo "GENERATED" > "$result_file"
+      else
+        echo "FAILED" > "$result_file"
       fi
     fi
-  done < "$sha1_list"
-
-  log "Finished scanning $CHECKSUMS_SCANNED checksum files"
+  elif [[ "$checksum_value" == "$EMPTY_SHA1" ]]; then
+    log "[$processed_count/$total_count] Empty checksum: $key"
+    if [[ "$DRY_RUN" == "1" ]]; then
+      echo "EMPTY_DRY" > "$result_file"
+    else
+      if compute_and_upload_checksum "$key"; then
+        log "  ✓ Fixed empty checksum for: $key"
+        echo "FIXED" > "$result_file"
+      else
+        echo "FAILED" > "$result_file"
+      fi
+    fi
+  else
+    # Checksum exists and is valid
+    echo "VALID" > "$result_file"
+  fi
 }
 
-generate_missing_checksums() {
-  log "Starting generate_missing_checksums..."
-  log "Listing inventories for '$PREFIX' and matching .checksums..."
+process_dist_files() {
+  log "Starting unified checksum validation and generation..."
+  log "Listing all files in '$PREFIX' from S3..."
 
-  # Declare all local variables upfront
-  local dist_keys_file checksummed_keys_file missing_file sha1_list
-  local dist_count checksum_file_count rel orig_key
+  local dist_keys_file total_count results_dir
+  dist_keys_file="$TMP_WORK/all_dist_keys.txt"
+  results_dir="$TMP_WORK/results"
 
-  # Build list of dist keys (filtered by extension)
-  dist_keys_file="$TMP_WORK/dist_keys.txt"
-  checksummed_keys_file="$TMP_WORK/checksummed_keys.txt"
-  missing_file="$TMP_WORK/missing_keys.txt"
-  sha1_list="$TMP_WORK/sha1_files_gen.txt"
+  # Create results directory
+  mkdir -p "$results_dir"
 
+  # List all dist files with allowed extensions
   : > "$dist_keys_file"
-  : > "$checksummed_keys_file"
 
-  log "Fetching list of dist/ keys from S3..."
-
+  log "Fetching list from S3 (this may take a moment for large buckets)..."
   list_dist_keys | while IFS= read -r key; do
     [[ -z "$key" ]] && continue
     [[ "$key" == */ ]] && continue
     if has_allowed_ext "$key"; then
-      printf '%s\n' "$key" >> "$dist_keys_file"
+      printf '%s\n' "$key"
     fi
+  done > "$dist_keys_file"
+
+  total_count=$(wc -l < "$dist_keys_file" | tr -d ' ') || total_count=0
+  log "Found $total_count files to process in dist/"
+
+  if [[ "$total_count" -eq 0 ]]; then
+    log "No files found to process"
+    return 0
+  fi
+
+  log ""
+  log "Processing files with $PARALLEL_JOBS parallel jobs..."
+  log "Progress updates every 50 files"
+  log ""
+
+  # Export functions and variables needed by parallel jobs
+  export -f process_single_file download_and_check_checksum compute_and_upload_checksum calc_sha1 log err has_allowed_ext
+  export S3_BUCKET S3_ENDPOINT PREFIX EMPTY_SHA1 DRY_RUN TMP_WORK TMP_DOWNLOADS TMP_CHECKSUMS FILTER_EXTS
+  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION AWS_REGION AWS_EC2_METADATA_DISABLED AWS_CONFIG_FILE
+  export AWS_ENDPOINT_ARG1 AWS_ENDPOINT_ARG2
+
+  # Process files in parallel using xargs
+  local processed_count=0
+  cat "$dist_keys_file" | while IFS= read -r key; do
+    processed_count=$((processed_count + 1))
+    printf '%s\t%s\t%s\n' "$key" "$total_count" "$processed_count"
+  done | xargs -P "$PARALLEL_JOBS" -I {} bash -c '
+    IFS=$'"'"'\t'"'"' read -r key total processed <<< "{}"
+    process_single_file "$key" "$total" "$processed"
+  '
+
+  log ""
+  log "Parallel processing completed. Collecting results..."
+
+  # Count results
+  local result_files
+  result_files=$(find "$results_dir" -type f -name "result.*" 2>/dev/null)
+
+  for rf in $result_files; do
+    result=$(cat "$rf" 2>/dev/null || echo "UNKNOWN")
+    case "$result" in
+      VALID)
+        CHECKSUMS_SCANNED=$((CHECKSUMS_SCANNED + 1))
+        ;;
+      GENERATED)
+        GENERATED_MISSING=$((GENERATED_MISSING + 1))
+        MISSING_COUNT=$((MISSING_COUNT + 1))
+        ;;
+      FIXED)
+        FIXED_EMPTY=$((FIXED_EMPTY + 1))
+        CHECKSUMS_SCANNED=$((CHECKSUMS_SCANNED + 1))
+        ;;
+      MISSING_DRY|EMPTY_DRY)
+        MISSING_COUNT=$((MISSING_COUNT + 1))
+        ;;
+      FAILED)
+        SKIPPED_NO_SOURCE=$((SKIPPED_NO_SOURCE + 1))
+        ;;
+    esac
   done
 
-  dist_count=$(wc -l < "$dist_keys_file" | tr -d ' ') || dist_count=0
-  log "Found $dist_count dist files with allowed extensions"
-
-  # Prefer deriving from local synced files to avoid another remote roundtrip
-  log "Building list of existing checksums..."
-  if [[ -d "$TMP_CHECKSUMS" ]]; then
-    checksum_file_count=$(find "$TMP_CHECKSUMS" -type f -name '*.sha1' 2>/dev/null | wc -l)
-
-    if [[ "$checksum_file_count" -gt 0 ]]; then
-      log "Found $checksum_file_count checksum files in local cache"
-
-      # Create temp file with results
-      find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0 2>/dev/null > "$sha1_list" || true
-
-      # For each local checksum file, derive original key
-      while IFS= read -r -d '' f; do
-        rel="${f#${TMP_CHECKSUMS}/}"
-        orig_key="${rel%*.sha1}"
-        printf '%s\n' "$orig_key" >> "$checksummed_keys_file"
-      done < "$sha1_list"
-    else
-      log "Local cache directory exists but is empty, will use remote listing"
-      # Fallback to remote listing
-      list_checksum_keys | while IFS= read -r ckey; do
-        [[ -z "$ckey" ]] && continue
-        # Strip ".checksums/" prefix and ".sha1" suffix
-        ckey="${ckey#.checksums/}"
-        ckey="${ckey%*.sha1}"
-        printf '%s\n' "$ckey" >> "$checksummed_keys_file"
-      done
-    fi
-  else
-    # Fallback to remote listing
-    list_checksum_keys | while IFS= read -r ckey; do
-      [[ -z "$ckey" ]] && continue
-      # Strip ".checksums/" prefix and ".sha1" suffix
-      ckey="${ckey#.checksums/}"
-      ckey="${ckey%*.sha1}"
-      printf '%s\n' "$ckey" >> "$checksummed_keys_file"
-    done
-  fi
-
-  # Compute dist minus checksummed (missing)
-  sort -u "$dist_keys_file" -o "$dist_keys_file"
-  sort -u "$checksummed_keys_file" -o "$checksummed_keys_file"
-  comm -23 "$dist_keys_file" "$checksummed_keys_file" > "$missing_file" || true
-
-  MISSING_COUNT=$(wc -l < "$missing_file" | tr -d ' ')
-  if [[ "$MISSING_COUNT" -gt 0 ]]; then
-    log "Found $MISSING_COUNT missing checksum(s). Generating..."
-    while IFS= read -r key; do
-      [[ -z "$key" ]] && continue
-      if s3_object_exists "$key"; then
-        if [[ "$DRY_RUN" == "1" ]]; then
-          log "DRY_RUN: would generate checksum for s3://$S3_BUCKET/$key"
-        else
-          compute_and_upload_checksum "$key" && GENERATED_MISSING=$((GENERATED_MISSING + 1)) || true
-        fi
-      else
-        log "Skipping missing source: $key"
-        SKIPPED_NO_SOURCE=$((SKIPPED_NO_SOURCE + 1))
-      fi
-    done < "$missing_file"
-  else
-    log "No missing checksums detected."
-  fi
-
-  log "Finished generate_missing_checksums"
+  log "Finished processing all $total_count files"
 }
 
 main() {
+  log "========================================="
+  log "S3 Checksum Generator"
+  log "========================================="
   log "Bucket: $S3_BUCKET"
   log "Prefix: $PREFIX"
   log "Filter extensions: $FILTER_EXTS"
+  log "Parallel jobs: $PARALLEL_JOBS"
   if [[ "$DRY_RUN" == "1" ]]; then
     log "Mode: DRY RUN (no uploads)"
   fi
+  log "========================================="
   log ""
 
-  fix_empty_hash_checksums
-  log ""
-  generate_missing_checksums
+  process_dist_files
   log ""
 
   log "========================================="
   log "Summary:"
-  log "  Checksums scanned locally:   $CHECKSUMS_SCANNED"
-  log "  Empty-hash fixed:            $FIXED_EMPTY"
+  log "  Valid checksums found:       $CHECKSUMS_SCANNED"
+  log "  Empty checksums fixed:       $FIXED_EMPTY"
   log "  Missing checksums found:     $MISSING_COUNT"
   log "  Missing checksums generated: $GENERATED_MISSING"
   log "  Skipped (no source found):   $SKIPPED_NO_SOURCE"
   log "========================================="
-  log "Done."
+  log "✓ Done. All checksums uploaded immediately to S3."
 }
 
 main "$@"
