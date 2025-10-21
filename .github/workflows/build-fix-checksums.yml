@@ -73,31 +73,6 @@ jobs:
           fi
           aws --version
 
-      - name: Sync checksums from S3 to local cache
-        run: |
-          set -e
-          echo ">> Syncing checksums from S3 to local cache"
-
-          # Configure AWS CLI
-          export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
-          export AWS_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY}"
-          export AWS_DEFAULT_REGION="${S3_REGION}"
-
-          # Configure path-style access for R2
-          if [ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ]; then
-            export AWS_S3_USE_PATH_STYLE_ENDPOINT=true
-          fi
-
-          # Create directory if it doesn't exist
-          mkdir -p /tmp/s3-satis-generator/.checksums
-
-          # Sync checksums from S3 to local
-          aws s3 sync "s3://${S3_BUCKET}/.checksums" /tmp/s3-satis-generator/.checksums \
-            --endpoint-url="${S3_ENDPOINT}" || true
-
-          echo ">> Checksums synced from S3 to local cache"
-          du -sh /tmp/s3-satis-generator/.checksums || true
-
       - name: Generate missing checksums with script
         run: |
           set -e

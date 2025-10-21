@@ -131,7 +131,7 @@ if [[ -d "/tmp/s3-satis-generator/.checksums" ]]; then
   TMP_CHECKSUMS="/tmp/s3-satis-generator/.checksums"
   TMP_WORK=$(mktemp -d)
   TMP_DOWNLOADS="$TMP_WORK/downloads"
-  mkdir -p "$TMP_DOWNLOADS"
+  mkdir -p "$TMP_CHECKSUMS" "$TMP_DOWNLOADS"
   # Don't clean up TMP_CHECKSUMS on exit since it's the persistent cache
   PERSISTENT_CACHE=true
 else
@@ -175,7 +175,7 @@ has_allowed_ext() {
 
 compute_and_upload_checksum() {
   # Args: key (dist/...)
-  local key="$1" filename tmpfile checksum checksum_key
+  local key="$1" filename tmpfile checksum checksum_key local_checksum_file
   filename=$(basename -- "$key")
   tmpfile="$TMP_DOWNLOADS/$filename"
   checksum_key=".checksums/$key.sha1"
@@ -193,12 +193,22 @@ compute_and_upload_checksum() {
   if [[ "$DRY_RUN" == "1" ]]; then
     log "DRY_RUN: would upload checksum to s3://$S3_BUCKET/$checksum_key => $checksum"
   else
+    # Upload to S3
     printf '%s' "$checksum" | aws s3 cp - "s3://$S3_BUCKET/$checksum_key" "${AWS_ENDPOINT_ARGS[@]}" \
       --content-type text/plain >/dev/null
+
+    # Always save to local cache (maintains consistency regardless of cache mode)
+    local_checksum_file="$TMP_CHECKSUMS/$key.sha1"
+    mkdir -p "$(dirname "$local_checksum_file")"
+    printf '%s' "$checksum" > "$local_checksum_file"
+    log "Saved checksum locally to $local_checksum_file"
   fi
 }
 
 fix_empty_hash_checksums() {
+  # Ensure TMP_CHECKSUMS directory exists
+  mkdir -p "$TMP_CHECKSUMS"
+
   # Download entire .checksums subtree for the PREFIX locally and fix empty-hash files
   if [[ "$PERSISTENT_CACHE" == "false" ]]; then
     log "Syncing .checksums/${PREFIX} to local temp dir to check for empty hashes..."
@@ -208,7 +218,11 @@ fix_empty_hash_checksums() {
     log "Using persistent cache at $TMP_CHECKSUMS (skipping S3 sync)"
   fi
 
-  if [[ ! -d "$TMP_CHECKSUMS" ]]; then
+  # Check if directory has any files
+  local file_count
+  file_count=$(find "$TMP_CHECKSUMS" -type f -name '*.sha1' 2>/dev/null | wc -l)
+  if [[ "$file_count" -eq 0 ]]; then
+    log "No checksum files found in $TMP_CHECKSUMS"
     return 0
   fi
 
@@ -218,9 +232,12 @@ fix_empty_hash_checksums() {
     local h rel orig_key
     h=$(tr -d '\n\r\t ' < "$f" || true)
     if [[ "$h" == "$EMPTY_SHA1" ]]; then
-      # Map local path back to S3 key: TMP_CHECKSUMS/<PREFIX>/path/file.zip.sha1 -> dist/.../file.zip
+      # Map local path back to S3 key
+      # For persistent cache: /tmp/s3-satis-generator/.checksums/dist/path/file.zip.sha1 -> dist/.../file.zip
+      # For temp cache: TMP_CHECKSUMS/path/file.zip.sha1 -> dist/.../file.zip
       rel="${f#${TMP_CHECKSUMS}/}"
       orig_key="${rel%*.sha1}"
+
       # Ensure it maps under PREFIX
       if [[ -n "$orig_key" && -n "$PREFIX" ]]; then
         # Confirm source exists in S3
@@ -237,7 +254,7 @@ fix_empty_hash_checksums() {
         fi
       fi
     fi
-  done < <(find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0)
+  done < <(find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0 2>/dev/null || true)
 }
 
 generate_missing_checksums() {
@@ -262,13 +279,29 @@ generate_missing_checksums() {
 
   # Prefer deriving from local synced files to avoid another remote roundtrip
   if [[ -d "$TMP_CHECKSUMS" ]]; then
-    # For each local checksum file, derive original key
-    while IFS= read -r -d '' f; do
-      local rel orig_key
-      rel="${f#${TMP_CHECKSUMS}/}"
-      orig_key="${rel%*.sha1}"
-      printf '%s\n' "$orig_key" >> "$checksummed_keys_file"
-    done < <(find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0)
+    local checksum_file_count
+    checksum_file_count=$(find "$TMP_CHECKSUMS" -type f -name '*.sha1' 2>/dev/null | wc -l)
+
+    if [[ "$checksum_file_count" -gt 0 ]]; then
+      log "Found $checksum_file_count checksum files in local cache"
+      # For each local checksum file, derive original key
+      while IFS= read -r -d '' f; do
+        local rel orig_key
+        rel="${f#${TMP_CHECKSUMS}/}"
+        orig_key="${rel%*.sha1}"
+        printf '%s\n' "$orig_key" >> "$checksummed_keys_file"
+      done < <(find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0 2>/dev/null || true)
+    else
+      log "Local cache directory exists but is empty, will use remote listing"
+      # Fallback to remote listing
+      list_checksum_keys | while IFS= read -r ckey; do
+        [[ -z "$ckey" ]] && continue
+        # Strip ".checksums/" prefix and ".sha1" suffix
+        ckey="${ckey#.checksums/}"
+        ckey="${ckey%*.sha1}"
+        printf '%s\n' "$ckey" >> "$checksummed_keys_file"
+      done
+    fi
   else
     # Fallback to remote listing
     list_checksum_keys | while IFS= read -r ckey; do
