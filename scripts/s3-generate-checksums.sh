@@ -216,6 +216,9 @@ compute_and_upload_checksum() {
 fix_empty_hash_checksums() {
   log "Starting fix_empty_hash_checksums..."
 
+  # Declare all local variables upfront
+  local file_count h rel orig_key sha1_list
+
   # Ensure TMP_CHECKSUMS directory exists
   mkdir -p "$TMP_CHECKSUMS" || {
     err "Failed to create TMP_CHECKSUMS directory: $TMP_CHECKSUMS"
@@ -234,7 +237,6 @@ fix_empty_hash_checksums() {
 
   # Check if directory has any files
   log "Checking for .sha1 files in $TMP_CHECKSUMS..."
-  local file_count=0
   file_count=$(find "$TMP_CHECKSUMS" -type f -name '*.sha1' 2>/dev/null | wc -l | tr -d ' ') || file_count=0
   log "Found $file_count .sha1 files"
 
@@ -243,11 +245,29 @@ fix_empty_hash_checksums() {
     return 0
   fi
 
+  log "Scanning checksum files for empty hashes..."
+
+  # Use a temporary file list to avoid process substitution issues
+  sha1_list="$TMP_WORK/sha1_files.txt"
+  find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0 2>/dev/null > "$sha1_list" || true
+
+  # Check if we got any results
+  if [[ ! -s "$sha1_list" ]]; then
+    log "No .sha1 files to process"
+    return 0
+  fi
+
   # Iterate over all sha1 files
   while IFS= read -r -d '' f; do
-    ((CHECKSUMS_SCANNED++))
-    local h rel orig_key
-    h=$(tr -d '\n\r\t ' < "$f" || true)
+    CHECKSUMS_SCANNED=$((CHECKSUMS_SCANNED + 1))
+
+    # Log progress every 100 files
+    if [[ $((CHECKSUMS_SCANNED % 100)) -eq 0 ]]; then
+      log "Processed $CHECKSUMS_SCANNED files..."
+    fi
+
+    h=$(tr -d '\n\r\t ' < "$f" 2>/dev/null || echo "")
+
     if [[ "$h" == "$EMPTY_SHA1" ]]; then
       # Map local path back to S3 key
       # For persistent cache: /tmp/s3-satis-generator/.checksums/dist/path/file.zip.sha1 -> dist/.../file.zip
@@ -263,26 +283,34 @@ fix_empty_hash_checksums() {
           if [[ "$DRY_RUN" == "1" ]]; then
             log "DRY_RUN: would recompute checksum for s3://$S3_BUCKET/$orig_key and overwrite .checksums/$orig_key.sha1"
           else
-            compute_and_upload_checksum "$orig_key" && ((FIXED_EMPTY++)) || true
+            if compute_and_upload_checksum "$orig_key"; then
+              FIXED_EMPTY=$((FIXED_EMPTY + 1))
+            fi
           fi
         else
           log "Source missing for checksum '$rel' (expected: $orig_key). Skipping."
-          ((SKIPPED_NO_SOURCE++))
+          SKIPPED_NO_SOURCE=$((SKIPPED_NO_SOURCE + 1))
         fi
       fi
     fi
-  done < <(find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0 2>/dev/null || true)
+  done < "$sha1_list"
+
+  log "Finished scanning $CHECKSUMS_SCANNED checksum files"
 }
 
 generate_missing_checksums() {
   log "Starting generate_missing_checksums..."
   log "Listing inventories for '$PREFIX' and matching .checksums..."
 
+  # Declare all local variables upfront
+  local dist_keys_file checksummed_keys_file missing_file sha1_list
+  local dist_count checksum_file_count rel orig_key
+
   # Build list of dist keys (filtered by extension)
-  local dist_keys_file checksummed_keys_file missing_file
   dist_keys_file="$TMP_WORK/dist_keys.txt"
   checksummed_keys_file="$TMP_WORK/checksummed_keys.txt"
   missing_file="$TMP_WORK/missing_keys.txt"
+  sha1_list="$TMP_WORK/sha1_files_gen.txt"
 
   : > "$dist_keys_file"
   : > "$checksummed_keys_file"
@@ -297,25 +325,26 @@ generate_missing_checksums() {
     fi
   done
 
-  local dist_count=0
   dist_count=$(wc -l < "$dist_keys_file" | tr -d ' ') || dist_count=0
   log "Found $dist_count dist files with allowed extensions"
 
   # Prefer deriving from local synced files to avoid another remote roundtrip
   log "Building list of existing checksums..."
   if [[ -d "$TMP_CHECKSUMS" ]]; then
-    local checksum_file_count
     checksum_file_count=$(find "$TMP_CHECKSUMS" -type f -name '*.sha1' 2>/dev/null | wc -l)
 
     if [[ "$checksum_file_count" -gt 0 ]]; then
       log "Found $checksum_file_count checksum files in local cache"
+
+      # Create temp file with results
+      find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0 2>/dev/null > "$sha1_list" || true
+
       # For each local checksum file, derive original key
       while IFS= read -r -d '' f; do
-        local rel orig_key
         rel="${f#${TMP_CHECKSUMS}/}"
         orig_key="${rel%*.sha1}"
         printf '%s\n' "$orig_key" >> "$checksummed_keys_file"
-      done < <(find "$TMP_CHECKSUMS" -type f -name '*.sha1' -print0 2>/dev/null || true)
+      done < "$sha1_list"
     else
       log "Local cache directory exists but is empty, will use remote listing"
       # Fallback to remote listing
@@ -352,16 +381,18 @@ generate_missing_checksums() {
         if [[ "$DRY_RUN" == "1" ]]; then
           log "DRY_RUN: would generate checksum for s3://$S3_BUCKET/$key"
         else
-          compute_and_upload_checksum "$key" && ((GENERATED_MISSING++)) || true
+          compute_and_upload_checksum "$key" && GENERATED_MISSING=$((GENERATED_MISSING + 1)) || true
         fi
       else
         log "Skipping missing source: $key"
-        ((SKIPPED_NO_SOURCE++))
+        SKIPPED_NO_SOURCE=$((SKIPPED_NO_SOURCE + 1))
       fi
     done < "$missing_file"
   else
     log "No missing checksums detected."
   fi
+
+  log "Finished generate_missing_checksums"
 }
 
 main() {
