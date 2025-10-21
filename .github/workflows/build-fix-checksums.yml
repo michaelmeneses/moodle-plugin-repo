@@ -37,7 +37,7 @@ jobs:
       - name: Restore Composer cache
         uses: actions/cache@v4
         with:
-          path: ~/.composer/cache
+          path: /root/.cache/composer
           key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             composer-${{ runner.os }}-
@@ -45,7 +45,7 @@ jobs:
       - name: Restore VCS mirrors cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/composer/vcs
+          path: /root/.cache/composer/vcs
           key: satis-vcs-${{ runner.os }}
           restore-keys: |
             satis-vcs-${{ runner.os }}
@@ -58,15 +58,45 @@ jobs:
           restore-keys: |
             s3-satis-${{ runner.os }}
 
-      - name: Build s3-satis with --fix-checksums
+      - name: Sync local checksums cache to S3
         run: |
           set -e
-          echo "Running composer run full:s3-satis:fix-checksums"
-          composer run full:s3-satis:fix-checksums
+          if [ -d "/tmp/s3-satis-generator/.checksums" ]; then
+            echo ">> Syncing local checksums cache to S3"
+
+            # Configure AWS CLI
+            export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
+            export AWS_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY}"
+            export AWS_DEFAULT_REGION="${S3_REGION}"
+
+            # Configure path-style access for R2
+            if [ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ]; then
+              export AWS_S3_USE_PATH_STYLE_ENDPOINT=true
+            fi
+
+            # Sync checksums to S3
+            aws s3 sync /tmp/s3-satis-generator/.checksums "s3://${S3_BUCKET}/.checksums" \
+              --endpoint-url="${S3_ENDPOINT}" \
+              --delete
+
+            echo ">> Checksums cache synchronized successfully"
+          else
+            echo ">> No local checksums cache found at /tmp/s3-satis-generator/.checksums"
+          fi
+
+      - name: Generate missing checksums with script
+        run: |
+          set -e
+          echo "Running s3-generate-checksums.sh to verify and fix any missing checksums"
+          chmod +x scripts/s3-generate-checksums.sh
+          composer run checksums:s3
 
       - name: Show cache state summary
         run: |
           echo "Cache states:"
-          du -sh ~/.composer/cache || true
-          du -sh ~/.cache/composer/vcs || true
+          du -sh /root/.cache/composer || true
           du -sh /tmp/s3-satis-generator || true
+          if [ -d "/tmp/s3-satis-generator/.checksums" ]; then
+            echo "Checksums cache:"
+            du -sh /tmp/s3-satis-generator/.checksums || true
+          fi

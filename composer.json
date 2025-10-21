@@ -38,6 +38,7 @@
             "@php -r \"if (!file_exists('s3-satis.phar')) { echo 'Error: s3-satis.phar not found in project root\\n'; exit(1); }\"",
             "PROCESS_TIMEOUT=1800 COMPOSER_PROCESS_TIMEOUT=1800 php s3-satis.phar build s3-satis.json --skip-errors --fix-checksums --no-interaction-s3"
         ],
+        "checksums:s3": "bash ./scripts/s3-generate-checksums.sh",
         "full:satis": [
             "@gen:satis",
             "@build:satis"

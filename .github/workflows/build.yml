@@ -45,7 +45,7 @@ jobs:
       - name: Restore Composer cache
         uses: actions/cache@v4
         with:
-          path: ~/.composer/cache
+          path: /root/.cache/composer
           key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             composer-${{ runner.os }}-
@@ -53,7 +53,7 @@ jobs:
       - name: Restore VCS mirrors cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/composer/vcs
+          path: /root/.cache/composer/vcs
           key: satis-vcs-${{ runner.os }}
           restore-keys: |
             satis-vcs-${{ runner.os }}
@@ -133,6 +133,5 @@ jobs:
       - name: Show cache state summary
         run: |
           echo "Cache states:"
-          du -sh ~/.composer/cache || true
-          du -sh ~/.cache/composer/vcs || true
+          du -sh /root/.cache/composer || true
           du -sh /tmp/s3-satis-generator || true
