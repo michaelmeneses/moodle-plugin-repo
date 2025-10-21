@@ -6,8 +6,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/util.php';
 require_once __DIR__ . '/opengraph_cache.php';
 
-const MOODLE_LATEST = "5.0";
-const MOODLE_LATEST_BEFORE = "4.5";
+const MOODLE_LATEST = "5.1";
+const MOODLE_LATEST_BEFORE = "5.0";
 const MOODLE_35_BUILD = "2018051700";
 
 $satisfile = __DIR__ . '/satis.json';
@@ -86,12 +86,15 @@ if ($mode === 's3-satis') {
     ];
 }
 
-$allcomponents = file_get_contents(__DIR__ . '/components.json');
-$allcomponents = json_decode($allcomponents, true);
-
-$pluginlistjson = get_content_from_url($api);
-if (!$pluginlist = json_decode($pluginlistjson)) {
-    die("Unable to read plugin list");
+try {
+    $allcomponents = json_decode(file_get_contents(__DIR__ . '/components.json'), true, 512, JSON_THROW_ON_ERROR);
+    $pluginlistjson = get_content_from_url($api);
+    if (!$pluginlist = json_decode($pluginlistjson, false, 512, JSON_THROW_ON_ERROR)) {
+        die("Unable to read plugin list");
+    }
+} catch (JsonException $e) {
+    $allcomponents = [];
+    $pluginlist = [];
 }
 
 $packages = [];
@@ -124,16 +127,14 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     }
 
     // All right
-    list($type, $name) = normalize_component($plugin->component, $allcomponents);
+    [$type, $name] = normalize_component($plugin->component, $allcomponents);
 
     $vendor = 'moodle';
     if (in_array($url['host'], ['github.com', 'gitlab.com', 'bitbucket.org'])) {
         $paths = explode('/', $url['path'], 3);
-        if (isset($paths[1]) && !empty($paths[1])) {
+        if (!empty($paths[1])) {
             $vendor = mb_strtolower($paths[1], 'UTF-8');
         }
-    } else {
-        $vendor = 'moodle';
     }
 
     $packages[$plugin->component] = [
@@ -141,13 +142,11 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         'package' => []
     ];
 
-    $timecreated = '';
-    if (isset($version->timecreated) && $version->timecreated > 0) {
-        $timecreated = date('Y-m-d', $version->timecreated);
-    }
     $homepage = 'https://moodle.org/plugins/' . $plugin->component;
 
     $opengraphCache[$homepage] = opengraph_get_cached_info($homepage, $opengraphCache);
+
+    $packagename = $vendor . '/moodle-' . $type . '_' . $name;
 
     foreach ($plugin->versions as $version) {
         $supportedmoodles = [];
@@ -155,8 +154,8 @@ foreach ($pluginlist->plugins as $key => $plugin) {
             if ($suport || $supportedmoodle->version >= MOODLE_35_BUILD) {
                 $prefix = '';
                 $sufix = '.*';
-                if ($supportedmoodle->release == MOODLE_LATEST
-                    || $supportedmoodle->release == MOODLE_LATEST_BEFORE) {
+                if ($supportedmoodle->release === MOODLE_LATEST
+                    || $supportedmoodle->release === MOODLE_LATEST_BEFORE) {
                     $prefix = ">=";
                     $sufix = '';
                 }
@@ -170,7 +169,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
 
         $supportedmoodles = implode(' || ', $supportedmoodles);
 
-        $packagename = $vendor . '/moodle-' . $type . '_' . $name;
+        $timecreated = (isset($version->timecreated) && $version->timecreated > 0) ? date('Y-m-d', $version->timecreated) : '';
 
         $package = [
             'name' => $packagename,
@@ -239,7 +238,7 @@ foreach ($coremaxversions as $major => $max) {
             $directory = 'stable' . $sub[0] . '0' . $sub[1];
         }
         $filename = "moodle-$versionno.zip";
-        if ($i == '0') {
+        if ($i === 0) {
             $filename = "moodle-$major.zip";
         }
         $url = $corebase . "/$directory/$filename";
@@ -265,38 +264,42 @@ foreach ($coremaxversions as $major => $max) {
 
 $satisjson['repositories'][] = $moodles;
 
-$schemaFile = 'vendor/composer/satis/res/satis-schema.json';
-$schemaFileContents = file_get_contents($schemaFile);
-$schema = json_decode($schemaFileContents);
-$validator = new Validator();
-$satisjson = (object)$satisjson;
-$validator->validate($satisjson, $schema);
-if (!$validator->isValid()) {
-    $errors = $validator->getErrors();
+try {
+    $schemaFile = 'vendor/composer/satis/res/satis-schema.json';
+    $schemaFileContents = file_get_contents($schemaFile);
+    $schema = json_decode($schemaFileContents, false, 512, JSON_THROW_ON_ERROR);
+    $validator = new Validator();
+    $satisjson = (object)$satisjson;
+    $validator->validate($satisjson, $schema);
+    if (!$validator->isValid()) {
+        $errors = $validator->getErrors();
 
-    // Remover erro de propriedade adicional 's3-satis' apenas quando tipo for 's3-satis'
-    if ($mode === 's3-satis') {
-        foreach ($errors as $key => $error) {
-            if (isset($error['constraint']['name'], $error['constraint']['params']['property'])) {
-                $constraint = $error['constraint'];
-                if ($constraint['name'] === 'additionalProp' && $constraint['params']['property'] === 's3-satis') {
-                    unset($errors[$key]);
+        // Remover erro de propriedade adicional 's3-satis' apenas quando tipo for 's3-satis'
+        if ($mode === 's3-satis') {
+            foreach ($errors as $key => $error) {
+                if (isset($error['constraint']['name'], $error['constraint']['params']['property'])) {
+                    $constraint = $error['constraint'];
+                    if ($constraint['name'] === 'additionalProp' && $constraint['params']['property'] === 's3-satis') {
+                        unset($errors[$key]);
+                    }
                 }
             }
         }
+
+        if (count($errors)) {
+            echo 'Failed validation for mode: ' . $mode . PHP_EOL;
+            var_dump($errors);
+            $errorfile = str_replace('.json', '-error-' . date('Y-m-d-m-Y-H-i-s') . '.json', $satisfile);
+            file_put_contents($errorfile, json_encode($satisjson, JSON_THROW_ON_ERROR));
+            exit(1);
+        }
     }
 
-    if (count($errors)) {
-        echo 'Failed validation for mode: ' . $mode . PHP_EOL;
-        var_dump($errors);
-        $errorfile = str_replace('.json', '-error-' . date('Y-m-d-m-Y-H-i-s') . '.json', $satisfile);
-        file_put_contents($errorfile, json_encode($satisjson));
-        exit(1);
-    }
+    // Save OpenGraph cache to local file and S3
+    opengraph_cache_save($opengraphCache, $cacheFile);
+
+    // Save satis.json
+    file_put_contents($satisfile, json_encode($satisjson, JSON_THROW_ON_ERROR));
+
+} catch (JsonException $e) {
 }
-
-// Save OpenGraph cache to local file and S3
-opengraph_cache_save($opengraphCache, $cacheFile);
-
-// Save satis.json
-file_put_contents($satisfile, json_encode($satisjson));
