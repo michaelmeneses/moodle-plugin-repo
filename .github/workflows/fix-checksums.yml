@@ -34,6 +34,14 @@ jobs:
       - name: Checkout source-code
         uses: actions/checkout@v4
 
+      - name: Restore temp checksums cache
+        uses: actions/cache@v4
+        with:
+          path: ./temp
+          key: checksums-temp-${{ runner.os }}
+          restore-keys: |
+            checksums-temp-${{ runner.os }}
+
       - name: Install AWS CLI if needed
         run: |
           set -e
@@ -55,3 +63,8 @@ jobs:
           echo ">> Running s3-generate-checksums.sh to verify and fix any missing checksums"
           chmod +x scripts/s3-generate-checksums.sh
           composer run checksums:s3
+
+      - name: Show cache state summary
+        run: |
+          echo "Cache states:"
+          du -sh ./temp || true
