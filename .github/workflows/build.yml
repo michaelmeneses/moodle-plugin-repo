@@ -53,18 +53,18 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: /tmp/s3-generate-checksums
-          key: checksums-temp-${{ runner.os }}
+          key: checksums-temp-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
-            checksums-temp-${{ runner.os }}
+            checksums-temp-${{ runner.os }}-
 
       - name: Restore S3-Satis cache
         id: restore-s3-satis
         uses: actions/cache/restore@v4
         with:
           path: /tmp/s3-satis-generator
-          key: s3-satis-${{ runner.os }}
+          key: s3-satis-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
-            s3-satis-${{ runner.os }}
+            s3-satis-${{ runner.os }}-
 
       - name: Install AWS CLI if needed
         run: |
@@ -112,14 +112,14 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: /tmp/s3-generate-checksums
-          key: checksums-temp-${{ runner.os }}
+          key: checksums-temp-${{ runner.os }}-${{ github.run_id }}
 
       - name: Save S3-Satis cache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: /tmp/s3-satis-generator
-          key: s3-satis-${{ runner.os }}
+          key: s3-satis-${{ runner.os }}-${{ github.run_id }}
 
       - name: Show cache state summary
         run: |
