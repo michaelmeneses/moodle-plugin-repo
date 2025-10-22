@@ -91,14 +91,14 @@ jobs:
       - name: Sync local checksums caches
         run: |
           set -e
-          echo ">> Syncing local .checksums caches with rsync between /tmp/s3-generate-checksums and /tmp/s3-satis-generator (prefer /tmp/s3-generate-checksums/.checksums)"
+          echo ">> Syncing local .checksums caches with rsync between /tmp/s3-generate-checksums and /tmp/s3-satis-generator (prefer /tmp/s3-generate-checksums/checksums)"
           # Ensure both directories exist
-          mkdir -p /tmp/s3-generate-checksums/.checksums
+          mkdir -p /tmp/s3-generate-checksums/checksums
           mkdir -p /tmp/s3-satis-generator/.checksums
           # 1) Push from preferred → secondary: overwrite differing files, do NOT delete extras on destination
-          rsync -a /tmp/s3-generate-checksums/.checksums/ /tmp/s3-satis-generator/.checksums/
+          rsync -a /tmp/s3-generate-checksums/checksums/ /tmp/s3-satis-generator/.checksums/
           # 2) Backfill from secondary → preferred: only copy files that don't exist on destination (no overwrite)
-          rsync -a --ignore-existing /tmp/s3-satis-generator/.checksums/ /tmp/s3-generate-checksums/.checksums/
+          rsync -a --ignore-existing /tmp/s3-satis-generator/.checksums/ /tmp/s3-generate-checksums/checksums/
           echo ">> Done syncing local .checksums caches with rsync"
 
       - name: Build s3-satis
