@@ -73,13 +73,13 @@ if ($mode === 's3-satis') {
             'cache' => [
                 'enabled' => true,
                 'path' => '/tmp/s3-satis-generator',
+                'copy' => true,
             ],
             'skip-step-after-hook' => [
                 'enabled' => true,
                 'skip' => [
                     'BEFORE_INITIAL_CLEAR_TEMP_DIRECTORY',
-                    'BEFORE_REMOVE_MISSING_FILES_FROM_S3',
-                    'BEFORE_FINAL_CLEAR_TEMP_DIRECTORY'
+                    'BEFORE_REMOVE_MISSING_FILES_FROM_S3'
                 ]
             ]
         ]
