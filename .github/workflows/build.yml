@@ -132,3 +132,4 @@ jobs:
     name: Modify index.html with custom CSS
     needs: build
     uses: ./.github/workflows/modify-html.yml
+    secrets: inherit
