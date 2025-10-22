@@ -107,11 +107,6 @@ jobs:
           echo "Running composer run full:s3-satis"
           composer run full:s3-satis
 
-      - uses: peter-evans/workflow-dispatch@v2
-        with:
-          workflow: modify-html.yml
-          ref: main
-
       - name: Save temp checksums cache
         if: always()
         uses: actions/cache/save@v4
@@ -132,3 +127,9 @@ jobs:
           du -sh /root/.cache/composer || true
           du -sh /tmp/s3-satis-generator || true
           du -sh /tmp/s3-generate-checksums || true
+
+  modify_html:
+    name: Modify index.html with custom CSS
+    needs: build
+    uses: ./.github/workflows/modify-html.yml
+    secrets: inherit
