@@ -16,6 +16,7 @@
     "require": {
         "php": "^8.2",
         "ext-curl": "*",
+        "ext-mbstring": "*",
         "aws/aws-sdk-php": "^3.356",
         "composer/satis": "dev-main",
         "embed/embed": "^4.4",

@@ -66,7 +66,7 @@ if (!$no_outputdir) {
 }
 $satisjson['archive'] = (object)['directory' => 'dist', 'format' => 'zip'];
 
-// Adicionar configuração s3-satis apenas quando tipo for 's3-satis'
+// Add s3-satis configuration only when mode is 's3-satis'
 if ($mode === 's3-satis') {
     $satisjson['s3-satis'] = (object)[
         'plugins' => [
@@ -109,7 +109,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
     }
     // Check if source (vcs repository) is HTTPS
     $url = parse_url($plugin->source);
-    // Support to Moodle 3.2+
+    // Check support for Moodle 3.5+
     $suport = false;
     $greatversion[$plugin->component] = 0;
     foreach ($plugin->versions as $version) {
@@ -126,7 +126,7 @@ foreach ($pluginlist->plugins as $key => $plugin) {
         continue;
     }
 
-    // All right
+    // Process plugin component and normalize its type and name
     [$type, $name] = normalize_component($plugin->component, $allcomponents);
 
     $vendor = 'moodle';
@@ -274,7 +274,7 @@ try {
     if (!$validator->isValid()) {
         $errors = $validator->getErrors();
 
-        // Remover erro de propriedade adicional 's3-satis' apenas quando tipo for 's3-satis'
+        // Remove additional property error for 's3-satis' only when mode is 's3-satis'
         if ($mode === 's3-satis') {
             foreach ($errors as $key => $error) {
                 if (isset($error['constraint']['name'], $error['constraint']['params']['property'])) {

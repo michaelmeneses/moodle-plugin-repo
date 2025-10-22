@@ -329,19 +329,27 @@ function opengraph_fetch_info(string $url, bool $forceRefresh = false): array
 /**
  * Get OpenGraph info with cache validation based on expiration days.
  *
+ * Uses randomized cache expiration to prevent all entries from expiring simultaneously.
+ * Default: 20 days base + random 0-20 days = 20-40 days total per URL.
+ *
  * @param string $url URL to fetch metadata from
  * @param array $cache Current cache array (url => data)
- * @param int|null $cacheDays Number of days before cache expires (null = use env var or default 30)
+ * @param int|null $cacheDays Base number of days before cache expires (null = use env var or default 20)
  * @return array OpenGraph info (will fetch fresh if cache expired or missing)
  */
 function opengraph_get_cached_info(string $url, array $cache, ?int $cacheDays = null): array
 {
-    // Obter dias de expiração do cache (variável de ambiente ou padrão)
+    // Get base cache expiration days (environment variable or default 20)
     if ($cacheDays === null) {
-        $cacheDays = (int)middag_get_env('OPENGRAPH_CACHE_DAYS', '30');
+        $cacheDays = (int)middag_get_env('OPENGRAPH_CACHE_DAYS', '20');
     }
 
-    $cacheExpirationSeconds = $cacheDays * 86400; // dias * segundos por dia
+    // Add randomization: base days + random variation (0 to 20 days)
+    // This prevents all cache entries from expiring at the same time
+    $randomVariation = random_int(0, 20);
+    $totalCacheDays = $cacheDays + $randomVariation;
+
+    $cacheExpirationSeconds = $totalCacheDays * 86400; // days * seconds per day
     $currentTimestamp = time();
 
     // Verificar se existe cache para esta URL
