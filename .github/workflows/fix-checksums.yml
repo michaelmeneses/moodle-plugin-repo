@@ -35,9 +35,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore temp checksums cache
-        uses: actions/cache@v4
+        id: restore-temp-checksums
+        uses: actions/cache/restore@v4
         with:
-          path: ./temp
+          path: /tmp/s3-generate-checksums
           key: checksums-temp-${{ runner.os }}
           restore-keys: |
             checksums-temp-${{ runner.os }}
@@ -62,9 +63,16 @@ jobs:
           set -e
           echo ">> Running s3-generate-checksums.sh to verify and fix any missing checksums"
           chmod +x scripts/s3-generate-checksums.sh
-          composer run checksums:s3
+          TMP_WORK=/tmp/s3-generate-checksums composer run checksums:s3
+
+      - name: Save temp checksums cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/s3-generate-checksums
+          key: checksums-temp-${{ runner.os }}
 
       - name: Show cache state summary
         run: |
           echo "Cache states:"
-          du -sh ./temp || true
+          du -sh /tmp/s3-generate-checksums || true

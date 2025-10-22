@@ -4,12 +4,6 @@ on:
   schedule:
     - cron: "0 2 * * *"
   workflow_dispatch:
-    inputs:
-      fix_checksums:
-        description: "Run s3-satis with --fix-checksums to correct packages checksums"
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   build:
@@ -22,8 +16,8 @@ jobs:
 
     env:
       COMPOSER_ALLOW_SUPERUSER: 1
-      PROCESS_TIMEOUT: 1800
-      COMPOSER_PROCESS_TIMEOUT: 1800
+      PROCESS_TIMEOUT: 21600
+      COMPOSER_PROCESS_TIMEOUT: 21600
       COMPOSER_MEMORY_LIMIT: -1
 
       # Envs for Satis MIDDAG
@@ -42,42 +36,37 @@ jobs:
       - name: Checkout source-code
         uses: actions/checkout@v4
 
-      - name: Restore Composer cache
-        uses: actions/cache@v4
-        with:
-          path: /root/.cache/composer
-          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            composer-${{ runner.os }}-
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: |
+          echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
-      - name: Restore VCS mirrors cache
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: /root/.cache/composer/vcs
-          key: satis-vcs-${{ runner.os }}
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
-            satis-vcs-${{ runner.os }}
+            ${{ runner.os }}-composer-
+
+      - name: Restore temp checksums cache
+        id: restore-temp-checksums
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/s3-generate-checksums
+          key: checksums-temp-${{ runner.os }}
+          restore-keys: |
+            checksums-temp-${{ runner.os }}
 
       - name: Restore S3-Satis cache
-        uses: actions/cache@v4
+        id: restore-s3-satis
+        uses: actions/cache/restore@v4
         with:
           path: /tmp/s3-satis-generator
           key: s3-satis-${{ runner.os }}
           restore-keys: |
             s3-satis-${{ runner.os }}
 
-      - name: Build s3-satis
-        run: |
-          set -e
-          if [ "${{ github.event.inputs.fix_checksums }}" = "true" ]; then
-            echo "Running composer run full:s3-satis:fix-checksums"
-            composer run full:s3-satis:fix-checksums
-          else
-            echo "Running composer run full:s3-satis"
-            composer run full:s3-satis
-          fi
-
-      - name: Modify index.html with custom CSS
+      - name: Install AWS CLI if needed
         run: |
           set -e
           if ! command -v aws &> /dev/null; then
@@ -92,46 +81,54 @@ jobs:
           fi
           aws --version
 
-          echo ">> Downloading index.html from R2"
+      - name: Fix checksums before build
+        run: |
+          set -e
+          echo ">> Running s3-generate-checksums.sh to verify and fix any missing checksums"
+          chmod +x scripts/s3-generate-checksums.sh
+          TMP_WORK=/tmp/s3-generate-checksums composer run checksums:s3
 
-          # Configure AWS CLI to use Cloudflare R2 endpoint
-          export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
-          export AWS_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY}"
-          export AWS_DEFAULT_REGION="${S3_REGION}"
+      - name: Sync local checksums caches
+        run: |
+          set -e
+          echo ">> Syncing local .checksums caches with rsync between /tmp/s3-generate-checksums and /tmp/s3-satis-generator (prefer /tmp/s3-generate-checksums/.checksums)"
+          # Ensure both directories exist
+          mkdir -p /tmp/s3-generate-checksums/.checksums
+          mkdir -p /tmp/s3-satis-generator/.checksums
+          # 1) Push from preferred → secondary: overwrite differing files, do NOT delete extras on destination
+          rsync -a /tmp/s3-generate-checksums/.checksums/ /tmp/s3-satis-generator/.checksums/
+          # 2) Backfill from secondary → preferred: only copy files that don't exist on destination (no overwrite)
+          rsync -a --ignore-existing /tmp/s3-satis-generator/.checksums/ /tmp/s3-generate-checksums/.checksums/
+          echo ">> Done syncing local .checksums caches with rsync"
 
-          # Configure path-style access for R2 (AWS CLI v2)
-          if [ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ]; then
-            export AWS_S3_USE_PATH_STYLE_ENDPOINT=true
-          fi
+      - name: Build s3-satis
+        run: |
+          set -e
+          echo "Running composer run full:s3-satis"
+          composer run full:s3-satis
 
-          # Create temporary directory
-          TEMP_DIR=$(mktemp -d)
-          INDEX_FILE="$TEMP_DIR/index.html"
+      - uses: peter-evans/workflow-dispatch@v2
+        with:
+          workflow: modify-html.yml
+          ref: main
 
-          # Download index.html from R2
-          if aws s3 cp "s3://${S3_BUCKET}/index.html" "$INDEX_FILE" \
-            --endpoint-url="${S3_ENDPOINT}"; then
+      - name: Save temp checksums cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/s3-generate-checksums
+          key: checksums-temp-${{ runner.os }}
 
-            echo ">> Adding custom CSS to index.html"
-            sed -i '/<head>/a <style>.field-required-by {display: none !important;}</style>' "$INDEX_FILE"
-
-            echo ">> Uploading modified index.html back to R2"
-            aws s3 cp "$INDEX_FILE" "s3://${S3_BUCKET}/index.html" \
-              --endpoint-url="${S3_ENDPOINT}" \
-              --content-type "text/html"
-
-            echo "Inline CSS successfully added!"
-
-            # Clean up temporary file
-            rm -rf "$TEMP_DIR"
-          else
-            echo "Error: index.html file not found in bucket ${S3_BUCKET}. Skipping CSS addition."
-            rm -rf "$TEMP_DIR"
-            exit 0
-          fi
+      - name: Save S3-Satis cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/s3-satis-generator
+          key: s3-satis-${{ runner.os }}
 
       - name: Show cache state summary
         run: |
           echo "Cache states:"
           du -sh /root/.cache/composer || true
           du -sh /tmp/s3-satis-generator || true
+          du -sh /tmp/s3-generate-checksums || true
