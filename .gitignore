@@ -9,3 +9,4 @@ vendor
 *.lock
 !composer.lock
 opengraph_cache.json
+/temp

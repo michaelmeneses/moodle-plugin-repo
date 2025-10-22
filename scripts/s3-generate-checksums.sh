@@ -2,69 +2,50 @@
 #
 # s3-generate-checksums.sh
 #
-# Purpose:
-#   Ensure every archive under "dist/" has a valid SHA1 checksum at
-#   ".checksums/<original-key>.sha1" in the S3 bucket.
-#   - Fixes empty checksums (da39a3ee5e6b4b0d3255bfef95601890afd80709)
-#   - Generates missing checksums
+# Goal
+#   Ensure every object under "dist/" has a valid SHA1 stored at
+#   ".checksums/<key>.sha1" in the same S3-compatible bucket.
 #
-# Requirements:
-#   - bash, awk, sed, mktemp, wc
-#   - AWS CLI (aws) with S3 commands
-#   - shasum or openssl (for SHA1 calculation)
+# Design (8 steps per README.md)
+#   1. Downloads all existing .sha1 files from checksums directory (batched)
+#   2. Downloads list of target artifacts (only .zip and .tar suffixes)
+#   3. Compares artifacts vs checksums; marks for processing if: missing, empty, or corrupt
+#   4. Creates single internal list of artifacts requiring processing
+#   5. Presents this list to user *before* downloading large artifacts
+#   6. If not DRY_RUN: iterates list, downloads artifact, computes SHA1, uploads .sha1
+#   7. S3 operations retried up to 3 times with exponential backoff (1s, 2s, 4s)
+#   8. No data deleted; temp directory preserved for auditing
 #
-# Required environment variables:
-#   S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY,
-#   S3_REGION, S3_ENDPOINT, S3_USE_PATH_STYLE_ENDPOINT
+# Requirements
+#   - bash, awk, sed, wc, tr, grep, mktemp
+#   - AWS CLI v2 (aws)
+#   - shasum or openssl (for SHA1)
 #
-# Optional environment variables:
-#   PREFIX          (default: "dist/")
-#   FILTER_EXTS     (default: "zip tar")
-#   DRY_RUN         (default: "0")
-#   PARALLEL_JOBS   (default: "10")
+# Required env
+#   S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_REGION, S3_ENDPOINT, S3_USE_PATH_STYLE_ENDPOINT
 #
-# Usage:
-#   S3_BUCKET=privatesatis \
-#   S3_ACCESS_KEY_ID=... \
-#   S3_SECRET_ACCESS_KEY=... \
-#   S3_REGION=auto \
-#   S3_ENDPOINT=https://xxxx.r2.cloudflarestorage.com \
-#   S3_USE_PATH_STYLE_ENDPOINT=true \
-#   scripts/s3-generate-checksums.sh
+# Optional env
+#   PREFIX   (default: "dist/")
+#   DRY_RUN  (default: "0")
 #
+
 set -euo pipefail
 
-# Error handler for debugging
-error_handler() {
-  local line_no=$1
-  err "Script failed at line $line_no"
-  exit 1
-}
-trap 'error_handler $LINENO' ERR
+# ---------- logging / errors
+log() { printf '%s\n' "$*" >&2; }
+err() { printf 'ERROR: %s\n' "$*" >&2; }
+on_err() { err "Script failed at line $1"; exit 1; }
+trap 'on_err $LINENO' ERR
 
+# ---------- inputs
 PREFIX=${PREFIX:-dist/}
-FILTER_EXTS=${FILTER_EXTS:-"zip tar"}
 DRY_RUN=${DRY_RUN:-0}
-PARALLEL_JOBS=${PARALLEL_JOBS:-10}
-
-# Constants
+BATCH_SIZE=${BATCH_SIZE:-20}
 EMPTY_SHA1="da39a3ee5e6b4b0d3255bfef95601890afd80709"
 
-# Counters
-FIXED_EMPTY=0
-GENERATED_MISSING=0
-CHECKSUMS_SCANNED=0
-MISSING_COUNT=0
-SKIPPED_NO_SOURCE=0
+# ---------- preflight
+need() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
 
-log() { printf '%s\n' "$*"; }
-err() { printf 'ERROR: %s\n' "$*" >&2; }
-
-require() {
-  command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; };
-}
-
-# Validate environment
 : "${S3_BUCKET:?S3_BUCKET is required}"
 : "${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}"
 : "${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}"
@@ -72,44 +53,34 @@ require() {
 : "${S3_ENDPOINT:?S3_ENDPOINT is required}"
 : "${S3_USE_PATH_STYLE_ENDPOINT:?S3_USE_PATH_STYLE_ENDPOINT is required (true/false)}"
 
-require aws
+need aws
 
-# Determine hash tool
-calc_sha1() {
-  # Args: <file-path>
-  if command -v shasum >/dev/null 2>&1; then
-    shasum "$1" | awk '{print $1}'
-  elif command -v openssl >/dev/null 2>&1; then
-    # Output format: SHA1(filename)= <hash>
-    openssl dgst -sha1 "$1" | awk -F'= ' '{print $2}'
-  else
-    err "No SHA-1 tool found (need shasum or openssl)"
-    return 1
-  fi
-}
+# ---------- anchor paths to the script directory (not the current cwd)
+# SCRIPT_DIR = folder containing this script (e.g., <project>/scripts)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# PROJECT_ROOT = parent of scripts (e.g., <project>)
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Setup AWS env
+# ---------- working dirs (absolute paths)
+TMP_WORK="${TMP_WORK:-$PROJECT_ROOT/temp}"
+TMP_CHECKSUMS="$TMP_WORK/checksums"
+TMP_DOWNLOADS="$TMP_WORK/downloads"
+TMP_RESULTS="$TMP_WORK/results"
+mkdir -p "$TMP_WORK" "$TMP_CHECKSUMS" "$TMP_DOWNLOADS" "$TMP_RESULTS"
+
+# ---------- aws env
 export AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY"
 export AWS_DEFAULT_REGION="$S3_REGION"
 export AWS_REGION="$S3_REGION"
 export AWS_EC2_METADATA_DISABLED=true
 
-# Store endpoint args as variables for parallel job compatibility
 AWS_ENDPOINT_ARG1="--endpoint-url"
 AWS_ENDPOINT_ARG2="$S3_ENDPOINT"
 
-# Configure path-style addressing if requested
 TMP_AWS_CONFIG=""
-cleanup() {
-  if [[ -n "$TMP_AWS_CONFIG" && -f "$TMP_AWS_CONFIG" ]]; then
-    rm -f "$TMP_AWS_CONFIG" || true
-  fi
-}
-trap cleanup EXIT INT TERM
-
 if [[ "${S3_USE_PATH_STYLE_ENDPOINT,,}" == "true" ]]; then
-  TMP_AWS_CONFIG=$(mktemp)
+  TMP_AWS_CONFIG="$(mktemp)"
   cat > "$TMP_AWS_CONFIG" <<EOF
 [default]
 region = ${S3_REGION}
@@ -119,240 +90,369 @@ EOF
   export AWS_CONFIG_FILE="$TMP_AWS_CONFIG"
 fi
 
-# Working directories
-TMP_WORK="./temp"
-TMP_CHECKSUMS="$TMP_WORK/checksums"
-TMP_DOWNLOADS="$TMP_WORK/downloads"
-mkdir -p "$TMP_CHECKSUMS" "$TMP_DOWNLOADS"
-
-# Helpers
-s3_object_exists() {
-  local key="$1"
-  aws s3api head-object --bucket "$S3_BUCKET" --key "$key" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" >/dev/null 2>&1
+cleanup() {
+  # step 8: temp directory preserved for auditing (only AWS config removed)
+  if [[ -n "${TMP_AWS_CONFIG:-}" && -f "$TMP_AWS_CONFIG" ]]; then
+    rm -f "$TMP_AWS_CONFIG" || true
+  fi
+  # Note: TMP_WORK and its contents are intentionally NOT removed
 }
+trap cleanup EXIT INT TERM
 
-list_dist_keys() {
-  # Outputs one key per line under PREFIX
-  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "$PREFIX" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" \
-    --output text --query 'Contents[].Key' 2>/dev/null | tr '\t' '\n' | sed '/^None$/d' | grep -v '^$' || true
-}
-
-list_checksum_keys() {
-  # Outputs checksum keys under .checksums/PREFIX
-  local cprefix
-  cprefix=".checksums/${PREFIX}"
-  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "$cprefix" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" \
-    --output text --query 'Contents[].Key' 2>/dev/null | tr '\t' '\n' | sed '/^None$/d' | grep -v '^$' || true
-}
-
-has_allowed_ext() {
-  local key="$1" ext
-  ext="${key##*.}"
-  for e in $FILTER_EXTS; do
-    if [[ "$ext" == "$e" ]]; then
-      return 0
-    fi
+# ---------- utils
+retry3() {
+  # step 7: S3 operations retried up to 3 times with exponential backoff (1s, 2s, 4s)
+  # usage: retry3 cmd args...
+  local attempt=0 delay=1
+  while true; do
+    if "$@"; then return 0; fi
+    attempt=$((attempt+1))
+    if [[ $attempt -ge 3 ]]; then return 1; fi
+    sleep "$delay"; delay=$((delay*2))
   done
-  return 1
 }
 
-compute_and_upload_checksum() {
-  # Args: key (dist/...)
-  local key="$1" filename tmpfile checksum checksum_key local_checksum_file
-  filename=$(basename -- "$key")
-  tmpfile="$TMP_DOWNLOADS/$filename.$$"  # Add PID for parallel safety
-  checksum_key=".checksums/$key.sha1"
-
-  aws s3 cp "s3://$S3_BUCKET/$key" "$tmpfile" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" >/dev/null 2>&1
-  checksum=$(calc_sha1 "$tmpfile")
-  rm -f "$tmpfile"
-
-  if [[ -z "$checksum" ]]; then
-    err "Failed to compute checksum for $key"
+calc_sha1_file() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum "$1" | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha1 "$1" | awk -F'= ' '{print $2}'
+  else
+    err "No SHA-1 tool found (need shasum or openssl)"
     return 1
   fi
+}
 
-  if [[ "$DRY_RUN" == "1" ]]; then
-    log "[DRY_RUN] Would upload: $checksum_key => $checksum"
-  else
-    # Upload to S3 IMMEDIATELY (so progress is not lost on timeout/error)
-    printf '%s' "$checksum" | aws s3 cp - "s3://$S3_BUCKET/$checksum_key" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" \
-      --content-type text/plain >/dev/null 2>&1
+# ---------- step 1a: list remote .sha1 files from S3
+build_checksums_inventory() {
+  local out="$TMP_WORK/remote_checksums.txt"
+  mkdir -p "$(dirname "$out")"
+  : > "$out"
+  log "Building remote checksums inventory from s3://$S3_BUCKET/.checksums/ ..."
+  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix ".checksums/" \
+    "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" \
+    --output text --query 'Contents[].Key' 2>/dev/null \
+  | tr '\t' '\n' \
+  | sed '/^None$/d;/^$/d' \
+  | while IFS= read -r key; do
+      case "$key" in
+        *.sha1)
+          # Remove .checksums/ prefix and .sha1 suffix to get the artifact key
+          local artifact_key="${key#.checksums/}"
+          artifact_key="${artifact_key%.sha1}"
+          printf '%s\n' "$artifact_key"
+          ;;
+        *) : ;;
+      esac
+    done > "$out.tmp"
+  mv -f "$out.tmp" "$out"
+  sort -u "$out" -o "$out"
+  echo "$out"
+}
 
-    # Also save locally for reference
-    local_checksum_file="$TMP_CHECKSUMS/$key.sha1"
-    mkdir -p "$(dirname "$local_checksum_file")"
-    printf '%s' "$checksum" > "$local_checksum_file"
+# ---------- step 1b: download existing .sha1 files (batched, with cleanup)
+sync_checksums_local() {
+  log "Syncing s3://$S3_BUCKET/.checksums/ -> $TMP_CHECKSUMS/ ..."
+  mkdir -p "$TMP_CHECKSUMS"
+  if ! retry3 aws s3 sync "s3://$S3_BUCKET/.checksums/" "$TMP_CHECKSUMS" \
+       "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2"; then
+    err "Partial/failed sync of .checksums (continuing; missing files will be treated as absent)"
   fi
 }
 
-download_and_check_checksum() {
-  # Download a single checksum file from S3 and return its content
-  # Args: checksum_key (e.g., ".checksums/dist/vendor/package/version.zip.sha1")
-  # Returns: the hash value, or empty string if file doesn't exist
-  local checksum_key="$1"
-  local content
-
-  content=$(aws s3 cp "s3://$S3_BUCKET/$checksum_key" - "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" 2>/dev/null | tr -d '\n\r\t ' || echo "")
-  printf '%s' "$content"
+# ---------- step 2: download list of target artifacts (.zip and .tar only)
+build_dist_inventory() {
+  local out="$TMP_WORK/dist_keys.txt"
+  mkdir -p "$(dirname "$out")"
+  : > "$out"
+  log "Building dist inventory from s3://$S3_BUCKET/$PREFIX ..."
+  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "$PREFIX" \
+    "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" \
+    --output text --query 'Contents[].Key' 2>/dev/null \
+  | tr '\t' '\n' \
+  | sed '/^None$/d;/^$/d' \
+  | while IFS= read -r key; do
+      case "$key" in
+        *.zip|*.tar) printf '%s\n' "$key" ;;
+        *) : ;;
+      esac
+    done > "$out.tmp"
+  mv -f "$out.tmp" "$out"
+  sort -u "$out" -o "$out"
+  echo "$out"
 }
 
-process_single_file() {
-  # Process a single file (for parallel execution)
-  # Args: key, total_count, processed_count
+# ---------- step 3: compare artifacts vs checksums (classify: valid | missing | empty | corrupt)
+# Double verification: checks both remote S3 list AND local synced files
+classify_checksums_local() {
+  local dist_list="$1"
+  local remote_checksums="$2"
+  local valid="$TMP_WORK/valid.txt"
+  local missing="$TMP_WORK/missing.txt"
+  local empty="$TMP_WORK/empty.txt"
+  local corrupt="$TMP_WORK/corrupt.txt"
+  : > "$valid"; : > "$missing"; : > "$empty"; : > "$corrupt"
+
+  # Build a lookup set from remote checksums for faster checking
+  # This ensures we verify against the actual S3 state, not just local cache
+  declare -A remote_exists
+  if [[ -f "$remote_checksums" ]]; then
+    while IFS= read -r rkey; do
+      [[ -z "$rkey" ]] && continue
+      remote_exists["$rkey"]=1
+    done < "$remote_checksums"
+  fi
+
+  log "Classifying checksums with double verification (remote + local)..."
+  while IFS= read -r key; do
+    # FIRST CHECK: Does checksum exist in remote S3 list?
+    # This catches cases where a .sha1 was deleted from S3 but still exists locally
+    if [[ -z "${remote_exists[$key]:-}" ]]; then
+      printf '%s\n' "$key" >> "$missing"
+      continue
+    fi
+
+    # SECOND CHECK: Does local synced file exist?
+    local local_sha="$TMP_CHECKSUMS/$key.sha1"
+    if [[ ! -f "$local_sha" ]]; then
+      # Remote says it exists but local file missing (sync issue)
+      printf '%s\n' "$key" >> "$missing"
+      continue
+    fi
+
+    # THIRD CHECK: Validate content of local file
+    local content
+    content="$(tr -d '\n\r\t ' < "$local_sha" 2>/dev/null || echo '')"
+    if [[ -z "$content" ]]; then
+      printf '%s\n' "$key" >> "$empty"; continue
+    fi
+    if [[ "$content" == "$EMPTY_SHA1" ]]; then
+      printf '%s\n' "$key" >> "$empty"; continue
+    fi
+    if [[ ! "$content" =~ ^[0-9a-fA-F]{40}$ ]]; then
+      printf '%s\n' "$key" >> "$corrupt"; continue
+    fi
+
+    # All checks passed
+    printf '%s\n' "$key" >> "$valid"
+  done < "$dist_list"
+
+  printf '%s|%s|%s|%s' "$valid" "$missing" "$empty" "$corrupt"
+}
+
+# ---------- step 6: download artifact, compute SHA1 (executed per item in real run)
+download_and_sha1() {
   local key="$1"
-  local total_count="$2"
-  local processed_count="$3"
-  local checksum_key checksum_value result_file
-
-  checksum_key=".checksums/$key.sha1"
-  result_file="$TMP_WORK/results/result.$$"
-
-  # Check if checksum exists and get its value
-  checksum_value=$(download_and_check_checksum "$checksum_key")
-
-  # Process if checksum is missing or empty
-  if [[ -z "$checksum_value" ]]; then
-    log "[$processed_count/$total_count] Missing checksum: $key"
-    if [[ "$DRY_RUN" == "1" ]]; then
-      echo "MISSING_DRY" > "$result_file"
-    else
-      if compute_and_upload_checksum "$key"; then
-        log "  ✓ Generated checksum for: $key"
-        echo "GENERATED" > "$result_file"
-      else
-        echo "FAILED" > "$result_file"
-      fi
-    fi
-  elif [[ "$checksum_value" == "$EMPTY_SHA1" ]]; then
-    log "[$processed_count/$total_count] Empty checksum: $key"
-    if [[ "$DRY_RUN" == "1" ]]; then
-      echo "EMPTY_DRY" > "$result_file"
-    else
-      if compute_and_upload_checksum "$key"; then
-        log "  ✓ Fixed empty checksum for: $key"
-        echo "FIXED" > "$result_file"
-      else
-        echo "FAILED" > "$result_file"
-      fi
-    fi
-  else
-    # Checksum exists and is valid
-    echo "VALID" > "$result_file"
+  local dst="$TMP_DOWNLOADS/$key"
+  mkdir -p "$(dirname "$dst")"
+  if ! retry3 aws s3 cp "s3://$S3_BUCKET/$key" "$dst" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" >/dev/null 2>&1; then
+    err "Failed to download $key"
+    return 2
   fi
+  local sum
+  sum="$(calc_sha1_file "$dst")" || return 3
+  printf '%s' "$sum"
 }
 
-process_dist_files() {
-  log "Starting unified checksum validation and generation..."
-  log "Listing all files in '$PREFIX' from S3..."
+# ---------- batch uploads using file queue
+QUEUE_FILE="$TMP_WORK/upload_queue.txt"
+: > "$QUEUE_FILE"
 
-  local dist_keys_file total_count results_dir
-  dist_keys_file="$TMP_WORK/all_dist_keys.txt"
-  results_dir="$TMP_WORK/results"
+queue_add() { echo "$1|$2|$3" >> "$QUEUE_FILE"; }
 
-  # Create results directory
-  mkdir -p "$results_dir"
+flush_upload_batch() {
+  local report_pipe="$1"  # a temp file to return per-item statuses
+  : > "$report_pipe"
 
-  # List all dist files with allowed extensions
-  : > "$dist_keys_file"
-
-  log "Fetching list from S3 (this may take a moment for large buckets)..."
-  list_dist_keys | while IFS= read -r key; do
-    [[ -z "$key" ]] && continue
-    [[ "$key" == */ ]] && continue
-    if has_allowed_ext "$key"; then
-      printf '%s\n' "$key"
-    fi
-  done > "$dist_keys_file"
-
-  total_count=$(wc -l < "$dist_keys_file" | tr -d ' ') || total_count=0
-  log "Found $total_count files to process in dist/"
-
-  if [[ "$total_count" -eq 0 ]]; then
-    log "No files found to process"
+  # take first BATCH_SIZE lines
+  local batch_file="$TMP_WORK/batch.$$"
+  head -n "$BATCH_SIZE" "$QUEUE_FILE" > "$batch_file" || true
+  if [[ ! -s "$batch_file" ]]; then
+    rm -f "$batch_file" || true
     return 0
   fi
 
-  log ""
-  log "Processing files with $PARALLEL_JOBS parallel jobs..."
-  log "Progress updates every 50 files"
-  log ""
+  # keep the rest
+  tail -n +$((BATCH_SIZE + 1)) "$QUEUE_FILE" > "$QUEUE_FILE.tmp" || true
+  mv -f "$QUEUE_FILE.tmp" "$QUEUE_FILE"
 
-  # Export functions and variables needed by parallel jobs
-  export -f process_single_file download_and_check_checksum compute_and_upload_checksum calc_sha1 log err has_allowed_ext
-  export S3_BUCKET S3_ENDPOINT PREFIX EMPTY_SHA1 DRY_RUN TMP_WORK TMP_DOWNLOADS TMP_CHECKSUMS FILTER_EXTS
-  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION AWS_REGION AWS_EC2_METADATA_DISABLED AWS_CONFIG_FILE
-  export AWS_ENDPOINT_ARG1 AWS_ENDPOINT_ARG2
+  # process batch
+  while IFS='|' read -r key sha action; do
+    [[ -z "${key:-}" ]] && continue
+    local local_sha="$TMP_CHECKSUMS/$key.sha1"
+    mkdir -p "$(dirname "$local_sha")"
+    printf '%s' "$sha" > "$local_sha"
 
-  # Process files in parallel using xargs
-  local processed_count=0
-  cat "$dist_keys_file" | while IFS= read -r key; do
-    processed_count=$((processed_count + 1))
-    printf '%s\t%s\t%s\n' "$key" "$total_count" "$processed_count"
-  done | xargs -P "$PARALLEL_JOBS" -I {} bash -c '
-    IFS=$'"'"'\t'"'"' read -r key total processed <<< "{}"
-    process_single_file "$key" "$total" "$processed"
-  '
+    if retry3 bash -c 'printf "%s" "$0" | aws s3 cp - "s3://'"$S3_BUCKET"'/.checksums/'"$key"'.sha1" --content-type "text/plain" "'"$AWS_ENDPOINT_ARG1"'" "'"$AWS_ENDPOINT_ARG2"'" >/dev/null 2>&1' "$sha"; then
+      printf 'OK|%s|%s\n' "$key" "$action" >> "$report_pipe"
+    else
+      printf 'FAILED|%s|%s\n' "$key" "$action" >> "$report_pipe"
+    fi
+  done < "$batch_file"
 
-  log ""
-  log "Parallel processing completed. Collecting results..."
-
-  # Count results
-  local result_files
-  result_files=$(find "$results_dir" -type f -name "result.*" 2>/dev/null)
-
-  for rf in $result_files; do
-    result=$(cat "$rf" 2>/dev/null || echo "UNKNOWN")
-    case "$result" in
-      VALID)
-        CHECKSUMS_SCANNED=$((CHECKSUMS_SCANNED + 1))
-        ;;
-      GENERATED)
-        GENERATED_MISSING=$((GENERATED_MISSING + 1))
-        MISSING_COUNT=$((MISSING_COUNT + 1))
-        ;;
-      FIXED)
-        FIXED_EMPTY=$((FIXED_EMPTY + 1))
-        CHECKSUMS_SCANNED=$((CHECKSUMS_SCANNED + 1))
-        ;;
-      MISSING_DRY|EMPTY_DRY)
-        MISSING_COUNT=$((MISSING_COUNT + 1))
-        ;;
-      FAILED)
-        SKIPPED_NO_SOURCE=$((SKIPPED_NO_SOURCE + 1))
-        ;;
-    esac
-  done
-
-  log "Finished processing all $total_count files"
+  rm -f "$batch_file" || true
+  return 0
 }
 
+# ---------- step 4 & 5: create internal list and present to user (planning + execution)
+process_plan() {
+  local valid="$1" missing="$2" empty="$3" corrupt="$4"
+  local report="$TMP_WORK/report.json"
+
+  # step 4: create single internal list (combining missing + empty + corrupt)
+  local already_valid missing_count empty_count corrupt_count total_to_process
+  already_valid=$(wc -l < "$valid" 2>/dev/null | tr -d ' ' || echo 0)
+  missing_count=$(wc -l < "$missing" 2>/dev/null | tr -d ' ' || echo 0)
+  empty_count=$(wc -l < "$empty" 2>/dev/null | tr -d ' ' || echo 0)
+  corrupt_count=$(wc -l < "$corrupt" 2>/dev/null | tr -d ' ' || echo 0)
+  total_to_process=$(( missing_count + empty_count + corrupt_count ))
+
+  # step 5: present complete list to user *before* downloading any large artifacts
+  log ""
+  log "========================================="
+  log "Processing Plan Summary:"
+  log "========================================="
+  log "  Already valid:     $already_valid"
+  log "  Missing checksums: $missing_count"
+  log "  Empty checksums:   $empty_count"
+  log "  Corrupt checksums: $corrupt_count"
+  log "  Total to process:  $total_to_process"
+  log "========================================="
+
+  # Build complete list for report (always, regardless of DRY_RUN)
+  {
+    echo '{'
+    echo '  "mode":"'"$(if [[ "$DRY_RUN" == "1" ]]; then echo "dry-run"; else echo "run"; fi)"'",'
+    echo '  "missing":'"$missing_count"', "empty":'"$empty_count"', "corrupt":'"$corrupt_count"', "total_to_process":'"$total_to_process"', "already_valid":'"$already_valid"','
+    echo '  "items": ['
+    paste -d'\n' <(awk '{print "    {\"key\":\""$0"\",\"action\":\"missing\"},"}' "$missing" 2>/dev/null || echo "") \
+                  <(awk '{print "    {\"key\":\""$0"\",\"action\":\"empty\"},"}' "$empty" 2>/dev/null || echo "") \
+                  <(awk '{print "    {\"key\":\""$0"\",\"action\":\"corrupt\"},"}' "$corrupt" 2>/dev/null || echo "") \
+    | sed '/^$/d' | sed '$ s/,$//'
+    echo '  ]'
+    echo '}'
+  } > "$report"
+
+  # DRY_RUN mode: stop here (no artifact downloads per README rule)
+  if [[ "$DRY_RUN" == "1" ]]; then
+    log ""
+    log "DRY-RUN mode enabled: No artifacts will be downloaded."
+    log "Report written to $report"
+    return 0
+  fi
+
+  # step 6: real execution - now download and process artifacts
+  log ""
+  log "Starting artifact processing (downloads + SHA1 computation)..."
+  log ""
+
+  local generated=0 fixed=0 failed=0
+  : > "$QUEUE_FILE"
+
+  handle_one() {
+    local key="$1" action="$2"
+    local sha
+    sha="$(download_and_sha1 "$key")" || {
+      failed=$((failed+1))
+      log "FAILED: $key"
+      return
+    }
+
+    # enqueue for batch upload
+    queue_add "$key" "$sha" "$action"
+    log "Processed: $key (action: $action)"
+
+    # flush every BATCH_SIZE
+    local queued
+    queued=$(wc -l < "$QUEUE_FILE" 2>/dev/null | tr -d ' ' || echo 0)
+    if [[ "$queued" -ge "$BATCH_SIZE" ]]; then
+      local resf="$TMP_RESULTS/flush.$$.txt"
+      flush_upload_batch "$resf"
+      if [[ -f "$resf" ]]; then
+        while IFS='|' read -r status fkey faction; do
+          case "$status" in
+            OK)
+              if [[ "$faction" == "generated" ]]; then generated=$((generated+1)); else fixed=$((fixed+1)); fi
+              ;;
+            FAILED)
+              failed=$((failed+1))
+              ;;
+          esac
+        done < "$resf"
+        rm -f "$resf" || true
+      fi
+    fi
+  }
+
+  # Process all items: missing => generated, empty => fixed, corrupt => fixed
+  while IFS= read -r k; do [[ -z "$k" ]] && continue; handle_one "$k" "generated"; done < "$missing"
+  while IFS= read -r k; do [[ -z "$k" ]] && continue; handle_one "$k" "fixed"; done < "$empty"
+  while IFS= read -r k; do [[ -z "$k" ]] && continue; handle_one "$k" "fixed"; done < "$corrupt"
+
+  # final flush of remaining items
+  local remaining
+  remaining=$(wc -l < "$QUEUE_FILE" 2>/dev/null | tr -d ' ' || echo 0)
+  if [[ "$remaining" -gt 0 ]]; then
+    local resf="$TMP_RESULTS/flush.$$.final.txt"
+    flush_upload_batch "$resf"
+    if [[ -f "$resf" ]]; then
+      while IFS='|' read -r status fkey faction; do
+        case "$status" in
+          OK)
+            if [[ "$faction" == "generated" ]]; then generated=$((generated+1)); else fixed=$((fixed+1)); fi
+            ;;
+          FAILED)
+            failed=$((failed+1))
+            ;;
+        esac
+      done < "$resf"
+      rm -f "$resf" || true
+    fi
+  fi
+
+  log ""
+  log "========================================="
+  log "Execution Summary:"
+  log "========================================="
+  log "  Checksums generated:   $generated"
+  log "  Checksums fixed:       $fixed"
+  log "  Failed:                $failed"
+  log "========================================="
+  log "Report written to $report"
+}
+
+# ---------- main
 main() {
   log "========================================="
   log "S3 Checksum Generator"
   log "========================================="
   log "Bucket: $S3_BUCKET"
   log "Prefix: $PREFIX"
-  log "Filter extensions: $FILTER_EXTS"
-  log "Parallel jobs: $PARALLEL_JOBS"
-  if [[ "$DRY_RUN" == "1" ]]; then
-    log "Mode: DRY RUN (no uploads)"
-  fi
+  [[ "$DRY_RUN" == "1" ]] && log "Mode: DRY RUN (no artifact downloads)"
   log "========================================="
-  log ""
 
-  process_dist_files
-  log ""
+  # Step 1: Get remote checksum inventory and sync locally
+  local remote_checksums
+  remote_checksums="$(build_checksums_inventory)"
+  log "Remote checksums found: $(wc -l < "$remote_checksums" | tr -d ' ')"
 
-  log "========================================="
-  log "Summary:"
-  log "  Valid checksums found:       $CHECKSUMS_SCANNED"
-  log "  Empty checksums fixed:       $FIXED_EMPTY"
-  log "  Missing checksums found:     $MISSING_COUNT"
-  log "  Missing checksums generated: $GENERATED_MISSING"
-  log "  Skipped (no source found):   $SKIPPED_NO_SOURCE"
-  log "========================================="
-  log "✓ Done. All checksums uploaded immediately to S3."
+  sync_checksums_local
+
+  # Step 2: Build dist inventory
+  local dist_list
+  dist_list="$(build_dist_inventory)"
+  log "Candidates in dist/: $(wc -l < "$dist_list" | tr -d ' ')"
+
+  # Step 3: Classify using both local and remote data
+  local cls
+  cls="$(classify_checksums_local "$dist_list" "$remote_checksums")"   # returns "valid|missing|empty|corrupt"
+  local VALID_FILE MISSING_FILE EMPTY_FILE CORRUPT_FILE
+  VALID_FILE="${cls%%|*}"; cls="${cls#*|}"
+  MISSING_FILE="${cls%%|*}"; cls="${cls#*|}"
+  EMPTY_FILE="${cls%%|*}"; cls="${cls#*|}"
+  CORRUPT_FILE="$cls"
+
+  process_plan "$VALID_FILE" "$MISSING_FILE" "$EMPTY_FILE" "$CORRUPT_FILE"
 }
 
 main "$@"
