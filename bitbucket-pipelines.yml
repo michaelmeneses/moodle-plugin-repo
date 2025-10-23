@@ -1,0 +1,159 @@
+image: middagtec/image-bitbucket-ci:v5-php82
+
+definitions:
+  caches:
+    s3satiscache: /tmp/s3-satis-generator
+    checksumscache: /tmp/s3-generate-checksums
+
+  steps:
+    - step: &run-satismoodle
+        name: Build and Deploy Satis
+        caches:
+          - composer
+          - s3satiscache
+          - checksumscache
+        script:
+          - export COMPOSER_ALLOW_SUPERUSER=1
+          - export PROCESS_TIMEOUT=21600
+          - export COMPOSER_PROCESS_TIMEOUT=21600
+          - export COMPOSER_MEMORY_LIMIT=-1
+
+          - echo "[PRE] Composer cache = $(du -sh ~/.composer/cache 2>/dev/null || true)"
+          - echo "[PRE] S3-Satis cache = $(du -sh /tmp/s3-satis-generator 2>/dev/null || true)"
+          - echo "[PRE] S3-Generate-Checksums cache = $(du -sh /tmp/s3-generate-checksums 2>/dev/null || true)"
+
+          - |
+            if ! command -v aws &> /dev/null; then
+              echo ">> AWS CLI not found. Installing AWS CLI v2..."
+              cd /tmp
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip -q awscliv2.zip
+              ./aws/install
+              rm -rf awscliv2.zip aws
+            else
+              echo ">> AWS CLI already installed"
+            fi
+          - aws --version
+
+          - echo ">> Running s3-generate-checksums.sh to verify and fix any missing checksums"
+          - chmod +x scripts/s3-generate-checksums.sh
+          - TMP_WORK=/tmp/s3-generate-checksums composer run checksums:s3
+
+          - |
+            set -e
+            echo ">> Syncing local .checksums caches with rsync between /tmp/s3-generate-checksums and /tmp/s3-satis-generator (prefer /tmp/s3-generate-checksums/checksums)"
+            # Ensure both directories exist
+            mkdir -p /tmp/s3-generate-checksums/checksums
+            mkdir -p /tmp/s3-satis-generator/.checksums
+            # 1) Push from preferred → secondary: overwrite differing files, do NOT delete extras on destination
+            rsync -a /tmp/s3-generate-checksums/checksums/ /tmp/s3-satis-generator/.checksums/
+            # 2) Backfill from secondary → preferred: only copy files that don't exist on destination (no overwrite)
+            rsync -a --ignore-existing /tmp/s3-satis-generator/.checksums/ /tmp/s3-generate-checksums/checksums/
+            echo ">> Done syncing local .checksums caches with rsync"
+
+          - echo "Running composer run full:s3-satis"
+          - composer run full:s3-satis
+
+          - echo "[POST] Composer cache = $(du -sh ~/.composer/cache 2>/dev/null || true)"
+          - echo "[POST] S3-Satis cache = $(du -sh /tmp/s3-satis-generator 2>/dev/null || true)"
+          - echo "[POST] S3-Generate-Checksums cache = $(du -sh /tmp/s3-generate-checksums 2>/dev/null || true)"
+
+    - step: &fix-checksums
+        name: Fix Checksums
+        caches:
+          - composer
+          - s3satiscache
+          - checksumscache
+        script:
+          - export COMPOSER_ALLOW_SUPERUSER=1
+          - export PROCESS_TIMEOUT=21600
+          - export COMPOSER_PROCESS_TIMEOUT=21600
+          - export COMPOSER_MEMORY_LIMIT=-1
+
+          - echo "[PRE] Composer cache = $(du -sh ~/.composer/cache 2>/dev/null || true)"
+          - echo "[PRE] S3-Generate-Checksums cache = $(du -sh /tmp/s3-generate-checksums 2>/dev/null || true)"
+
+          - |
+            if ! command -v aws &> /dev/null; then
+              echo ">> AWS CLI not found. Installing AWS CLI v2..."
+              cd /tmp
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip -q awscliv2.zip
+              ./aws/install
+              rm -rf awscliv2.zip aws
+            else
+              echo ">> AWS CLI already installed"
+            fi
+          - aws --version
+
+          - echo ">> Running s3-generate-checksums.sh to verify and fix any missing checksums"
+          - chmod +x scripts/s3-generate-checksums.sh
+          - TMP_WORK=/tmp/s3-generate-checksums composer run checksums:s3
+
+          - echo "[POST] Composer cache = $(du -sh ~/.composer/cache 2>/dev/null || true)"
+          - echo "[POST] S3-Generate-Checksums cache = $(du -sh /tmp/s3-generate-checksums 2>/dev/null || true)"
+
+    - step: &modify-html
+        name: Modify index.html with custom CSS
+        script:
+          - |
+            set -e
+            if ! command -v aws &> /dev/null; then
+              echo ">> AWS CLI not found. Installing AWS CLI v2..."
+              cd /tmp
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip -q awscliv2.zip
+              ./aws/install
+              rm -rf awscliv2.zip aws
+            else
+              echo ">> AWS CLI already installed"
+            fi
+          - aws --version
+
+          - echo ">> Downloading index.html from R2"
+
+          - export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
+          - export AWS_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY}"
+          - export AWS_DEFAULT_REGION="${S3_REGION}"
+
+          - |
+            if [ "${S3_USE_PATH_STYLE_ENDPOINT}" = "true" ]; then
+              export AWS_S3_USE_PATH_STYLE_ENDPOINT=true
+            fi
+
+          - TEMP_DIR=$(mktemp -d)
+          - INDEX_FILE="$TEMP_DIR/index.html"
+
+          - |
+            if aws s3 cp "s3://${S3_BUCKET}/index.html" "$INDEX_FILE" --endpoint-url="${S3_ENDPOINT}"; then
+              echo ">> Adding custom CSS to index.html"
+              sed -i '/<head>/a <style>.field-required-by {display: none !important;}<\/style>' "$INDEX_FILE"
+
+              echo ">> Uploading modified index.html back to R2"
+              aws s3 cp "$INDEX_FILE" "s3://${S3_BUCKET}/index.html" \
+                --endpoint-url="${S3_ENDPOINT}" \
+                --content-type "text/html"
+
+              echo "Inline CSS successfully added!"
+              rm -rf "$TEMP_DIR"
+            else
+              echo "Error: index.html file not found in bucket ${S3_BUCKET}. Skipping CSS addition."
+              rm -rf "$TEMP_DIR"
+              exit 0
+            fi
+
+pipelines:
+  default:
+    - step: *run-satismoodle
+    - step: *modify-html
+
+  custom:
+    deploy-satismoodle:
+      - step: *run-satismoodle
+      - step: *modify-html
+
+    fix-checksums:
+      - step: *fix-checksums
+
+    modify-html-only:
+      - step: *modify-html
