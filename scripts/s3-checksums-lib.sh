@@ -161,32 +161,93 @@ detect_orphans() {
   log "Detecting Orphaned Files:"
   log "========================================="
 
+  # Build hash tables for efficient lookups
+  declare -A dist_exists
+  declare -A checksum_exists
+
+  local total_dist=0
+  local total_checksums=0
+
+  # Load dist artifacts into hash table
+  if [[ -f "$dist_list" ]]; then
+    log "Loading artifact list into memory..."
+    while IFS= read -r artifact_key; do
+      [[ -z "$artifact_key" ]] && continue
+      dist_exists["$artifact_key"]=1
+      total_dist=$((total_dist + 1))
+    done < "$dist_list"
+    log "Loaded $total_dist artifacts"
+  fi
+
+  # Load checksums into hash table
+  if [[ -f "$remote_checksums" ]]; then
+    log "Loading checksum list into memory..."
+    while IFS= read -r checksum_key; do
+      [[ -z "$checksum_key" ]] && continue
+      checksum_exists["$checksum_key"]=1
+      total_checksums=$((total_checksums + 1))
+    done < "$remote_checksums"
+    log "Loaded $total_checksums checksums"
+  fi
+
   # Orphaned checksums: checksums that don't have corresponding artifacts in /dist
   local orphaned_checksums="$TMP_WORK/orphaned_checksums.txt"
   : > "$orphaned_checksums"
 
-  if [[ -f "$remote_checksums" ]]; then
-    while IFS= read -r checksum_key; do
-      [[ -z "$checksum_key" ]] && continue
-      # Check if corresponding artifact exists in dist list
-      if ! grep -qxF "$checksum_key" "$dist_list" 2>/dev/null; then
-        printf '%s\n' "$checksum_key" >> "$orphaned_checksums"
+  if [[ "$total_checksums" -gt 0 ]]; then
+    log "Checking for orphaned checksums..."
+    local processed=0
+    local progress_interval=1000
+
+    if [[ -f "$remote_checksums" ]]; then
+      while IFS= read -r checksum_key; do
+        [[ -z "$checksum_key" ]] && continue
+
+        # Check if corresponding artifact exists using hash table (O(1) lookup)
+        if [[ -z "${dist_exists[$checksum_key]:-}" ]]; then
+          printf '%s\n' "$checksum_key" >> "$orphaned_checksums"
+        fi
+
+        processed=$((processed + 1))
+        if [[ $((processed % progress_interval)) -eq 0 ]]; then
+          log "  Progress: $processed / $total_checksums checksums verificados"
+        fi
+      done < "$remote_checksums"
+
+      if [[ "$processed" -gt 0 ]]; then
+        log "  Completed: $processed / $total_checksums checksums verificados"
       fi
-    done < "$remote_checksums"
+    fi
   fi
 
   # Orphaned artifacts: artifacts in /dist that don't have checksums in /.checksums
   local orphaned_artifacts="$TMP_WORK/orphaned_artifacts.txt"
   : > "$orphaned_artifacts"
 
-  if [[ -f "$dist_list" ]]; then
-    while IFS= read -r artifact_key; do
-      [[ -z "$artifact_key" ]] && continue
-      # Check if corresponding checksum exists in remote list
-      if ! grep -qxF "$artifact_key" "$remote_checksums" 2>/dev/null; then
-        printf '%s\n' "$artifact_key" >> "$orphaned_artifacts"
+  if [[ "$total_dist" -gt 0 ]]; then
+    log "Checking for orphaned artifacts..."
+    local processed=0
+    local progress_interval=1000
+
+    if [[ -f "$dist_list" ]]; then
+      while IFS= read -r artifact_key; do
+        [[ -z "$artifact_key" ]] && continue
+
+        # Check if corresponding checksum exists using hash table (O(1) lookup)
+        if [[ -z "${checksum_exists[$artifact_key]:-}" ]]; then
+          printf '%s\n' "$artifact_key" >> "$orphaned_artifacts"
+        fi
+
+        processed=$((processed + 1))
+        if [[ $((processed % progress_interval)) -eq 0 ]]; then
+          log "  Progress: $processed / $total_dist artifacts verificados"
+        fi
+      done < "$dist_list"
+
+      if [[ "$processed" -gt 0 ]]; then
+        log "  Completed: $processed / $total_dist artifacts verificados"
       fi
-    done < "$dist_list"
+    fi
   fi
 
   local orphaned_checksum_count orphaned_artifact_count
