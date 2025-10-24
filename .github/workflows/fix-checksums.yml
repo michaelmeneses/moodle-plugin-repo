@@ -49,7 +49,7 @@ jobs:
       - name: Generate missing checksums with script
         run: |
           set -e
-          export TMP_WORK=$S3_SATIS_CACHE_CHECKSUMS
+          export S3C_ROOTDIR=$S3_SATIS_CACHE_CHECKSUMS
           echo ">> Running s3-checksums.sh to verify and fix any missing checksums"
           chmod +x scripts/s3-checksums.sh
           composer run checksums:s3
