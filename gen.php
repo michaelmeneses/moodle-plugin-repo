@@ -72,7 +72,7 @@ if ($mode === 's3-satis') {
         'plugins' => [
             'cache' => [
                 'enabled' => true,
-                'path' => '/tmp/s3-satis-generator',
+                'path' => middag_get_env('S3_SATIS_CACHE_DIR', '/tmp/s3-satis-generator'),
                 'copy' => true,
             ],
             'skip-step-after-hook' => [

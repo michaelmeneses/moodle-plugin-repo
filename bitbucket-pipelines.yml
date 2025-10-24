@@ -2,8 +2,8 @@ image: middagtec/image-bitbucket-ci:v5-php82
 
 definitions:
   caches:
-    s3satiscache: /tmp/s3-satis-generator
-    checksumscache: /tmp/s3-generate-checksums
+    s3satiscache: ${S3_SATIS_CACHE_DIR}
+    checksumscache: ${S3_SATIS_CACHE_CHECKSUMS}
 
   steps:
     - step: &run-satismoodle
@@ -17,46 +17,35 @@ definitions:
           - export PROCESS_TIMEOUT=21600
           - export COMPOSER_PROCESS_TIMEOUT=21600
           - export COMPOSER_MEMORY_LIMIT=-1
+          - export S3_SATIS_CACHE_DIR="${S3_SATIS_CACHE_DIR:-/tmp/s3-satis-generator}"
+          - export S3_SATIS_CACHE_CHECKSUMS="${S3_SATIS_CACHE_CHECKSUMS:-/tmp/s3-generate-checksums}"
 
           - echo "[PRE] Composer cache = $(du -sh ~/.composer/cache 2>/dev/null || true)"
-          - echo "[PRE] S3-Satis cache = $(du -sh /tmp/s3-satis-generator 2>/dev/null || true)"
-          - echo "[PRE] S3-Generate-Checksums cache = $(du -sh /tmp/s3-generate-checksums 2>/dev/null || true)"
+          - echo "[PRE] S3-Satis cache = $(du -sh $S3_SATIS_CACHE_DIR 2>/dev/null || true)"
+          - echo "[PRE] S3-Generate-Checksums cache = $(du -sh $S3_SATIS_CACHE_CHECKSUMS 2>/dev/null || true)"
 
-          - |
-            if ! command -v aws &> /dev/null; then
-              echo ">> AWS CLI not found. Installing AWS CLI v2..."
-              cd /tmp
-              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              unzip -q awscliv2.zip
-              ./aws/install
-              rm -rf awscliv2.zip aws
-            else
-              echo ">> AWS CLI already installed"
-            fi
-          - aws --version
-
-          - echo ">> Running s3-generate-checksums.sh to verify and fix any missing checksums"
-          - chmod +x scripts/s3-generate-checksums.sh
-          - TMP_WORK=/tmp/s3-generate-checksums composer run checksums:s3
+          - echo ">> Running s3-checksums.sh to verify and fix any missing checksums"
+          - chmod +x scripts/s3-checksums.sh
+          - TMP_WORK=$S3_SATIS_CACHE_CHECKSUMS composer run checksums:s3
 
           - |
             set -e
-            echo ">> Syncing local .checksums caches with rsync between /tmp/s3-generate-checksums and /tmp/s3-satis-generator (prefer /tmp/s3-generate-checksums/checksums)"
+            echo ">> Syncing local .checksums caches with rsync between $S3_SATIS_CACHE_CHECKSUMS and $S3_SATIS_CACHE_DIR (prefer $S3_SATIS_CACHE_CHECKSUMS/checksums)"
             # Ensure both directories exist
-            mkdir -p /tmp/s3-generate-checksums/checksums
-            mkdir -p /tmp/s3-satis-generator/.checksums
+            mkdir -p $S3_SATIS_CACHE_CHECKSUMS/checksums
+            mkdir -p $S3_SATIS_CACHE_DIR/.checksums
             # 1) Push from preferred → secondary: overwrite differing files, do NOT delete extras on destination
-            rsync -a /tmp/s3-generate-checksums/checksums/ /tmp/s3-satis-generator/.checksums/
+            rsync -a $S3_SATIS_CACHE_CHECKSUMS/checksums/ $S3_SATIS_CACHE_DIR/.checksums/
             # 2) Backfill from secondary → preferred: only copy files that don't exist on destination (no overwrite)
-            rsync -a --ignore-existing /tmp/s3-satis-generator/.checksums/ /tmp/s3-generate-checksums/checksums/
+            rsync -a --ignore-existing $S3_SATIS_CACHE_DIR/.checksums/ $S3_SATIS_CACHE_CHECKSUMS/checksums/
             echo ">> Done syncing local .checksums caches with rsync"
 
           - echo "Running composer run full:s3-satis"
           - composer run full:s3-satis
 
           - echo "[POST] Composer cache = $(du -sh ~/.composer/cache 2>/dev/null || true)"
-          - echo "[POST] S3-Satis cache = $(du -sh /tmp/s3-satis-generator 2>/dev/null || true)"
-          - echo "[POST] S3-Generate-Checksums cache = $(du -sh /tmp/s3-generate-checksums 2>/dev/null || true)"
+          - echo "[POST] S3-Satis cache = $(du -sh $S3_SATIS_CACHE_DIR 2>/dev/null || true)"
+          - echo "[POST] S3-Generate-Checksums cache = $(du -sh $S3_SATIS_CACHE_CHECKSUMS 2>/dev/null || true)"
 
     - step: &fix-checksums
         name: Fix Checksums
@@ -69,46 +58,24 @@ definitions:
           - export PROCESS_TIMEOUT=21600
           - export COMPOSER_PROCESS_TIMEOUT=21600
           - export COMPOSER_MEMORY_LIMIT=-1
+          - export S3_SATIS_CACHE_DIR="${S3_SATIS_CACHE_DIR:-/tmp/s3-satis-generator}"
+          - export S3_SATIS_CACHE_CHECKSUMS="${S3_SATIS_CACHE_CHECKSUMS:-/tmp/s3-generate-checksums}"
 
           - echo "[PRE] Composer cache = $(du -sh ~/.composer/cache 2>/dev/null || true)"
-          - echo "[PRE] S3-Generate-Checksums cache = $(du -sh /tmp/s3-generate-checksums 2>/dev/null || true)"
+          - echo "[PRE] S3-Generate-Checksums cache = $(du -sh $S3_SATIS_CACHE_CHECKSUMS 2>/dev/null || true)"
 
-          - |
-            if ! command -v aws &> /dev/null; then
-              echo ">> AWS CLI not found. Installing AWS CLI v2..."
-              cd /tmp
-              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              unzip -q awscliv2.zip
-              ./aws/install
-              rm -rf awscliv2.zip aws
-            else
-              echo ">> AWS CLI already installed"
-            fi
-          - aws --version
-
-          - echo ">> Running s3-generate-checksums.sh to verify and fix any missing checksums"
-          - chmod +x scripts/s3-generate-checksums.sh
-          - TMP_WORK=/tmp/s3-generate-checksums composer run checksums:s3
+          - echo ">> Running s3-checksums.sh to verify and fix any missing checksums"
+          - chmod +x scripts/s3-checksums.sh
+          - TMP_WORK=$S3_SATIS_CACHE_CHECKSUMS composer run checksums:s3
 
           - echo "[POST] Composer cache = $(du -sh ~/.composer/cache 2>/dev/null || true)"
-          - echo "[POST] S3-Generate-Checksums cache = $(du -sh /tmp/s3-generate-checksums 2>/dev/null || true)"
+          - echo "[POST] S3-Generate-Checksums cache = $(du -sh $S3_SATIS_CACHE_CHECKSUMS 2>/dev/null || true)"
 
     - step: &modify-html
         name: Modify index.html with custom CSS
         script:
           - |
             set -e
-            if ! command -v aws &> /dev/null; then
-              echo ">> AWS CLI not found. Installing AWS CLI v2..."
-              cd /tmp
-              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              unzip -q awscliv2.zip
-              ./aws/install
-              rm -rf awscliv2.zip aws
-            else
-              echo ">> AWS CLI already installed"
-            fi
-          - aws --version
 
           - echo ">> Downloading index.html from R2"
 

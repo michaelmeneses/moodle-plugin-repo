@@ -29,6 +29,8 @@ jobs:
       S3_REGION: ${{ vars.S3_REGION }}
       S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
       S3_USE_PATH_STYLE_ENDPOINT: ${{ vars.S3_USE_PATH_STYLE_ENDPOINT }}
+      S3_SATIS_CACHE_DIR: ${{ vars.S3_SATIS_CACHE_DIR }}
+      S3_SATIS_CACHE_CHECKSUMS: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
 
     steps:
       - name: Checkout source-code
@@ -38,41 +40,27 @@ jobs:
         id: restore-temp-checksums
         uses: actions/cache/restore@v4
         with:
-          path: /tmp/s3-generate-checksums
+          path: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
           key: checksums-temp-${{ runner.os }}
           restore-keys: |
             checksums-temp-${{ runner.os }}
 
-      - name: Install AWS CLI if needed
-        run: |
-          set -e
-          if ! command -v aws &> /dev/null; then
-            echo ">> AWS CLI not found. Installing AWS CLI v2..."
-            cd /tmp
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip -q awscliv2.zip
-            ./aws/install
-            rm -rf awscliv2.zip aws
-          else
-            echo ">> AWS CLI already installed"
-          fi
-          aws --version
-
       - name: Generate missing checksums with script
         run: |
           set -e
-          echo ">> Running s3-generate-checksums.sh to verify and fix any missing checksums"
-          chmod +x scripts/s3-generate-checksums.sh
-          TMP_WORK=/tmp/s3-generate-checksums composer run checksums:s3
+          export TMP_WORK=$S3_SATIS_CACHE_CHECKSUMS
+          echo ">> Running s3-checksums.sh to verify and fix any missing checksums"
+          chmod +x scripts/s3-checksums.sh
+          composer run checksums:s3
 
       - name: Save temp checksums cache
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: /tmp/s3-generate-checksums
+          path: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
           key: checksums-temp-${{ runner.os }}
 
       - name: Show cache state summary
         run: |
           echo "Cache states:"
-          du -sh /tmp/s3-generate-checksums || true
+          du -sh $S3_SATIS_CACHE_CHECKSUMS || true

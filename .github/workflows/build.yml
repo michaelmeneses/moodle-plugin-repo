@@ -31,6 +31,8 @@ jobs:
       S3_REGION: ${{ vars.S3_REGION }}
       S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
       S3_USE_PATH_STYLE_ENDPOINT: ${{ vars.S3_USE_PATH_STYLE_ENDPOINT }}
+      S3_SATIS_CACHE_DIR: ${{ vars.S3_SATIS_CACHE_DIR }}
+      S3_SATIS_CACHE_CHECKSUMS: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
 
     steps:
       - name: Checkout source-code
@@ -52,7 +54,7 @@ jobs:
         id: restore-temp-checksums
         uses: actions/cache/restore@v4
         with:
-          path: /tmp/s3-generate-checksums
+          path: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
           key: checksums-temp-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             checksums-temp-${{ runner.os }}-
@@ -61,44 +63,30 @@ jobs:
         id: restore-s3-satis
         uses: actions/cache/restore@v4
         with:
-          path: /tmp/s3-satis-generator
+          path: ${{ vars.S3_SATIS_CACHE_DIR }}
           key: s3-satis-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             s3-satis-${{ runner.os }}-
 
-      - name: Install AWS CLI if needed
-        run: |
-          set -e
-          if ! command -v aws &> /dev/null; then
-            echo ">> AWS CLI not found. Installing AWS CLI v2..."
-            cd /tmp
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip -q awscliv2.zip
-            ./aws/install
-            rm -rf awscliv2.zip aws
-          else
-            echo ">> AWS CLI already installed"
-          fi
-          aws --version
-
       - name: Fix checksums before build
         run: |
           set -e
-          echo ">> Running s3-generate-checksums.sh to verify and fix any missing checksums"
-          chmod +x scripts/s3-generate-checksums.sh
-          TMP_WORK=/tmp/s3-generate-checksums composer run checksums:s3
+          export TMP_WORK=$S3_SATIS_CACHE_CHECKSUMS
+          echo ">> Running s3-checksums.sh to verify and fix any missing checksums"
+          chmod +x scripts/s3-checksums.sh
+          composer run checksums:s3
 
       - name: Sync local checksums caches
         run: |
           set -e
-          echo ">> Syncing local .checksums caches with rsync between /tmp/s3-generate-checksums and /tmp/s3-satis-generator (prefer /tmp/s3-generate-checksums/checksums)"
+          echo ">> Syncing local .checksums caches with rsync between $S3_SATIS_CACHE_CHECKSUMS and $S3_SATIS_CACHE_DIR (prefer $S3_SATIS_CACHE_CHECKSUMS/checksums)"
           # Ensure both directories exist
-          mkdir -p /tmp/s3-generate-checksums/checksums
-          mkdir -p /tmp/s3-satis-generator/.checksums
+          mkdir -p $S3_SATIS_CACHE_CHECKSUMS/checksums
+          mkdir -p $S3_SATIS_CACHE_DIR/.checksums
           # 1) Push from preferred → secondary: overwrite differing files, do NOT delete extras on destination
-          rsync -a /tmp/s3-generate-checksums/checksums/ /tmp/s3-satis-generator/.checksums/
+          rsync -a $S3_SATIS_CACHE_CHECKSUMS/checksums/ $S3_SATIS_CACHE_DIR/.checksums/
           # 2) Backfill from secondary → preferred: only copy files that don't exist on destination (no overwrite)
-          rsync -a --ignore-existing /tmp/s3-satis-generator/.checksums/ /tmp/s3-generate-checksums/checksums/
+          rsync -a --ignore-existing $S3_SATIS_CACHE_DIR/.checksums/ $S3_SATIS_CACHE_CHECKSUMS/checksums/
           echo ">> Done syncing local .checksums caches with rsync"
 
       - name: Build s3-satis
@@ -111,22 +99,22 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: /tmp/s3-generate-checksums
+          path: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
           key: checksums-temp-${{ runner.os }}-${{ github.run_id }}
 
       - name: Save S3-Satis cache
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: /tmp/s3-satis-generator
+          path: ${{ vars.S3_SATIS_CACHE_DIR }}
           key: s3-satis-${{ runner.os }}-${{ github.run_id }}
 
       - name: Show cache state summary
         run: |
           echo "Cache states:"
           du -sh /root/.cache/composer || true
-          du -sh /tmp/s3-satis-generator || true
-          du -sh /tmp/s3-generate-checksums || true
+          du -sh $S3_SATIS_CACHE_DIR || true
+          du -sh $S3_SATIS_CACHE_CHECKSUMS || true
 
   modify_html:
     name: Modify index.html with custom CSS

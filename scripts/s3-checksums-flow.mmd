@@ -1,0 +1,65 @@
+%% Mermaid diagram: s3-checksums.sh end-to-end flow
+%% Location: scripts/s3-checksums-flow.mmd
+%% Purpose: Explain how the S3 checksum generator works
+
+flowchart TD
+  A0([Start]) --> A1[Read required env\nS3_BUCKET, S3_ACCESS_KEY_ID,\nS3_SECRET_ACCESS_KEY, S3_REGION,\nS3_ENDPOINT, S3_USE_PATH_STYLE_ENDPOINT]
+  A1 --> A2[Resolve options\nS3C_PREFIX default dist\nS3C_ROOTDIR default ./temp\nDRY_RUN 0 or 1\nS3C_CHECK_ORPHANS 0 or 1\nBATCH_SIZE default 20]
+  A2 --> A3[Create working dirs in S3C_ROOTDIR\nchecksums, downloads, results]
+  A3 --> A4[Set AWS env and optional path-style config]
+
+  subgraph S1 [Step 1: Checksums inventory]
+    direction TB
+    B1[build_checksums_inventory\nList s3://BUCKET/.checksums\n-> remote_checksums.txt]
+    B2[sync_checksums_local\nDownload only missing .sha1\n-> TMP_CHECKSUMS/<key>.sha1]
+  end
+  A4 --> S1 --> C1
+
+  C1[OK] --> C2[build_dist_inventory\nList s3://BUCKET/S3C_PREFIX\nFilter zip and tar\n-> dist_keys.txt]
+
+  C2 --> D1[classify_checksums_local\nUse remote list and local file]
+  D1 -->|valid| D1V[[valid.txt]]
+  D1 -->|missing| D1M[[missing.txt]]
+  D1 -->|empty| D1E[[empty.txt]]
+  D1 -->|corrupt| D1C[[corrupt.txt]]
+
+  D1V --> E0{S3C_CHECK_ORPHANS == 1}
+  D1M --> E0
+  D1E --> E0
+  D1C --> E0
+  E0 -- Yes --> E1[detect_orphans\nCompare dist_keys vs remote_checksums]
+  E1 --> E1C[[orphaned_checksums.txt]]
+  E1 --> E1A[[orphaned_artifacts.txt]]
+  E0 -- No --> E2[Create empty orphan files]
+
+  E1C --> F0
+  E1A --> F0
+  E2 --> F0
+  subgraph S5 [Step 5: Plan]
+    direction TB
+    F0[process_plan summarize counts]
+    F0 --> F1{DRY_RUN == 1}
+  end
+
+  F1 -- Yes --> G1[Write report.json] --> H([End])
+
+  F1 -- No --> R0[Init counters and clear upload_queue]
+  R0 --> R1[Iterate missing action generated]
+  R0 --> R2[Iterate empty action fixed]
+  R0 --> R3[Iterate corrupt action fixed]
+
+  subgraph S6 [Step 6-7: Execute with batching and retries]
+    direction TB
+    R1 --> S6a[download_and_sha1 key\naws s3 cp artifact to downloads\ncalc SHA1]
+    R2 --> S6a
+    R3 --> S6a
+    S6a --> S6b[queue_add key sha action]
+    S6b --> S6c{queue size >= BATCH_SIZE}
+    S6c -- Yes --> S6d[flush_upload_batch\nsave local .sha1 and upload]
+    S6d --> S6e[Update counters]
+    S6c -- No --> S6f[Continue]
+  end
+
+  S6f --> R4[Final flush if pending]
+  R4 --> R5[Write report.json summary]
+  R5 --> H

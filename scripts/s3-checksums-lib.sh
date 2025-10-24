@@ -3,7 +3,7 @@
 # s3-checksums-lib.sh
 #
 # Library of utility functions for S3 checksum operations
-# This file is sourced by s3-generate-checksums.sh
+# This file is sourced by s3-checksums.sh
 #
 
 # ---------- logging / errors
@@ -36,7 +36,7 @@ calc_sha1_file() {
 
 # ---------- step 1a: list remote .sha1 files from S3
 build_checksums_inventory() {
-  local out="$TMP_WORK/remote_checksums.txt"
+  local out="$S3C_ROOTDIR/remote_checksums.txt"
   mkdir -p "$(dirname "$out")"
   : > "$out"
   log "Building remote checksums inventory from s3://$S3_BUCKET/.checksums/ ..."
@@ -63,21 +63,130 @@ build_checksums_inventory() {
 
 # ---------- step 1b: download existing .sha1 files (batched, with cleanup)
 sync_checksums_local() {
-  log "Syncing s3://$S3_BUCKET/.checksums/ -> $TMP_CHECKSUMS/ ..."
-  mkdir -p "$TMP_CHECKSUMS"
-  if ! retry3 aws s3 sync "s3://$S3_BUCKET/.checksums/" "$TMP_CHECKSUMS" \
-       "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2"; then
-    err "Partial/failed sync of .checksums (continuing; missing files will be treated as absent)"
+  log "Syncing s3://$S3_BUCKET/.checksums/$S3C_PREFIX -> $TMP_CHECKSUMS/$S3C_PREFIX ..."
+  mkdir -p "$TMP_CHECKSUMS/$S3C_PREFIX"
+
+  local sync_success=1 # 0 = success, 1 = failure
+
+  # Count existing local files before sync
+  local existing_count=0
+  if [[ -d "$TMP_CHECKSUMS/$S3C_PREFIX" ]]; then
+    existing_count=$(find "$TMP_CHECKSUMS/$S3C_PREFIX" -type f -name "*.sha1" 2>/dev/null | wc -l | tr -d ' ')
   fi
+  log "Local checksums before sync: $existing_count"
+
+  # If rclone is enabled and available, use it to copy only missing .sha1 files
+  if [[ "${S3C_USE_RCLONE:-0}" == "1" ]] && command -v rclone >/dev/null 2>&1; then
+    local start_ts end_ts elapsed
+    start_ts=$(date +%s)
+
+    # Configure rclone via environment (more compatible across versions than inline backend options)
+    # force_path_style expects true/false
+    local fps="${S3_USE_PATH_STYLE_ENDPOINT,,}"
+    local rremote=":s3:$S3_BUCKET/.checksums/$S3C_PREFIX"
+    local rdst="$TMP_CHECKSUMS/$S3C_PREFIX"
+
+    # Apply defaults if not set in main script
+    local transfers="${S3C_RCLONE_TRANSFERS:-8}"
+    local checkers="${S3C_RCLONE_CHECKERS:-16}"
+    local extra_args=()
+    if [[ -n "${S3C_RCLONE_ARGS:-}" ]]; then
+      # shellcheck disable=SC2206
+      extra_args=( ${S3C_RCLONE_ARGS} )
+    fi
+
+    log "Using rclone sync --checksum ..."
+    if ! retry3 env \
+        RCLONE_S3_PROVIDER="Other" \
+        RCLONE_S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" \
+        RCLONE_S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" \
+        RCLONE_S3_REGION="$S3_REGION" \
+        RCLONE_S3_ENDPOINT="$S3_ENDPOINT" \
+        RCLONE_S3_FORCE_PATH_STYLE="$fps" \
+        rclone sync "$rremote" "$rdst" --checksum --filter "+ *.sha1" --filter "- *" \
+          --transfers "$transfers" --checkers "$checkers" "${extra_args[@]}"; then
+      sync_success=1
+    else
+      sync_success=0
+    fi
+
+    end_ts=$(date +%s); elapsed=$(( end_ts - start_ts ))
+    log "Sync method: rclone (checksum), elapsed: ${elapsed}s"
+  else
+    # Determine sync strategy for AWS path
+    local mode="${S3C_SYNC_MODE:-size-only}"
+    local sync_flags=()
+
+    case "$mode" in
+      size-only)
+        # Strategy: Update timestamps on cached files to be newer than S3 so default sync would skip.
+        # We also ask aws to use --size-only to ignore mtimes entirely during this run.
+        if [[ "$existing_count" -gt 0 ]]; then
+          log "Updating timestamps on cached files to prevent re-download..."
+          find "$TMP_CHECKSUMS/$S3C_PREFIX" -type f -name "*.sha1" -exec touch -t 203001010000 {} + 2>/dev/null || true
+        fi
+        sync_flags+=("--size-only")
+        ;;
+      mtime)
+        # Compare by LastModified (no special flags). Do NOT touch local timestamps.
+        ;;
+      mtime-exact)
+        # Compare by exact LastModified including seconds precision. Do NOT touch local timestamps.
+        sync_flags+=("--exact-timestamps")
+        ;;
+      *)
+        err "Unknown S3C_SYNC_MODE='$mode' (expected: size-only, mtime, mtime-exact). Falling back to size-only."
+        mode="size-only"
+        if [[ "$existing_count" -gt 0 ]]; then
+          log "Updating timestamps on cached files to prevent re-download..."
+          find "$TMP_CHECKSUMS/$S3C_PREFIX" -type f -name "*.sha1" -exec touch -t 203001010000 {} + 2>/dev/null || true
+        fi
+        sync_flags+=("--size-only")
+        ;;
+    esac
+
+    # --- AWS CLI Sync ---
+    local start_ts end_ts elapsed
+    start_ts=$(date +%s)
+    log "Using aws s3 sync (mode: $mode)..."
+    if ! retry3 aws s3 sync "s3://$S3_BUCKET/.checksums/$S3C_PREFIX/" "$TMP_CHECKSUMS/$S3C_PREFIX" \
+         ${sync_flags[@]+${sync_flags[@]}} \
+         "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2"; then
+      sync_success=1
+    else
+      sync_success=0
+    fi
+    end_ts=$(date +%s); elapsed=$(( end_ts - start_ts ))
+    log "Sync method: aws-cli-selective (mode: $mode), elapsed: ${elapsed}s"
+  fi
+
+  # --- Handle failure ---
+  if [[ $sync_success -ne 0 ]]; then
+    err "Partial/failed sync of .checksums (continuing; missing files will be treated as absent)"
+  else
+    # Count after sync
+    local after_count=0
+    if [[ -d "$TMP_CHECKSUMS/$S3C_PREFIX" ]]; then
+      after_count=$(find "$TMP_CHECKSUMS/$S3C_PREFIX" -type f -name "*.sha1" 2>/dev/null | wc -l | tr -d ' ')
+    fi
+    log "Local checksums after sync: $after_count (downloaded: $((after_count - existing_count)))"
+  fi
+
+  # Count after sync
+  local after_count=0
+  if [[ -d "$TMP_CHECKSUMS" ]]; then
+    after_count=$(find "$TMP_CHECKSUMS" -type f -name "*.sha1" 2>/dev/null | wc -l | tr -d ' ')
+  fi
+  log "Local checksums after sync: $after_count (downloaded: $((after_count - existing_count)))"
 }
 
-# ---------- step 2: download list of target artifacts (.zip and .tar only)
+# ---------- step 3: download list of target artifacts (.zip and .tar only)
 build_dist_inventory() {
-  local out="$TMP_WORK/dist_keys.txt"
+  local out="$S3C_ROOTDIR/dist_keys.txt"
   mkdir -p "$(dirname "$out")"
   : > "$out"
-  log "Building dist inventory from s3://$S3_BUCKET/$PREFIX ..."
-  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "$PREFIX" \
+  log "Building dist inventory from s3://$S3_BUCKET/$S3C_PREFIX ..."
+  aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "$S3C_PREFIX" \
     "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" \
     --output text --query 'Contents[].Key' 2>/dev/null \
   | tr '\t' '\n' \
@@ -93,15 +202,15 @@ build_dist_inventory() {
   echo "$out"
 }
 
-# ---------- step 3: compare artifacts vs checksums (classify: valid | missing | empty | corrupt)
+# ---------- step 4: compare artifacts vs checksums (classify: valid | missing | empty | corrupt)
 # Double verification: checks both remote S3 list AND local synced files
 classify_checksums_local() {
   local dist_list="$1"
   local remote_checksums="$2"
-  local valid="$TMP_WORK/valid.txt"
-  local missing="$TMP_WORK/missing.txt"
-  local empty="$TMP_WORK/empty.txt"
-  local corrupt="$TMP_WORK/corrupt.txt"
+  local valid="$S3C_ROOTDIR/valid.txt"
+  local missing="$S3C_ROOTDIR/missing.txt"
+  local empty="$S3C_ROOTDIR/empty.txt"
+  local corrupt="$S3C_ROOTDIR/corrupt.txt"
   : > "$valid"; : > "$missing"; : > "$empty"; : > "$corrupt"
 
   # Build a lookup set from remote checksums for faster checking
@@ -191,7 +300,7 @@ detect_orphans() {
   fi
 
   # Orphaned checksums: checksums that don't have corresponding artifacts in /dist
-  local orphaned_checksums="$TMP_WORK/orphaned_checksums.txt"
+  local orphaned_checksums="$S3C_ROOTDIR/orphaned_checksums.txt"
   : > "$orphaned_checksums"
 
   if [[ "$total_checksums" -gt 0 ]]; then
@@ -210,18 +319,18 @@ detect_orphans() {
 
         processed=$((processed + 1))
         if [[ $((processed % progress_interval)) -eq 0 ]]; then
-          log "  Progress: $processed / $total_checksums checksums verificados"
+          log "  Progress: $processed / $total_checksums checksums verified"
         fi
       done < "$remote_checksums"
 
       if [[ "$processed" -gt 0 ]]; then
-        log "  Completed: $processed / $total_checksums checksums verificados"
+        log "  Completed: $processed / $total_checksums checksums verified"
       fi
     fi
   fi
 
   # Orphaned artifacts: artifacts in /dist that don't have checksums in /.checksums
-  local orphaned_artifacts="$TMP_WORK/orphaned_artifacts.txt"
+  local orphaned_artifacts="$S3C_ROOTDIR/orphaned_artifacts.txt"
   : > "$orphaned_artifacts"
 
   if [[ "$total_dist" -gt 0 ]]; then
@@ -240,12 +349,12 @@ detect_orphans() {
 
         processed=$((processed + 1))
         if [[ $((processed % progress_interval)) -eq 0 ]]; then
-          log "  Progress: $processed / $total_dist artifacts verificados"
+          log "  Progress: $processed / $total_dist artifacts verified"
         fi
       done < "$dist_list"
 
       if [[ "$processed" -gt 0 ]]; then
-        log "  Completed: $processed / $total_dist artifacts verificados"
+        log "  Completed: $processed / $total_dist artifacts verified"
       fi
     fi
   fi
@@ -291,7 +400,7 @@ detect_orphans() {
   printf '%s|%s' "$orphaned_checksums" "$orphaned_artifacts"
 }
 
-# ---------- step 6: download artifact, compute SHA1 (executed per item in real run)
+# ---------- step 7: download artifact, compute SHA1 (executed per item in real run)
 download_and_sha1() {
   local key="$1"
   local dst="$TMP_DOWNLOADS/$key"
@@ -315,7 +424,7 @@ flush_upload_batch() {
   : > "$report_pipe"
 
   # take first BATCH_SIZE lines
-  local batch_file="$TMP_WORK/batch.$$"
+  local batch_file="$S3C_ROOTDIR/batch.$$"
   head -n "$BATCH_SIZE" "$QUEUE_FILE" > "$batch_file" || true
   if [[ ! -s "$batch_file" ]]; then
     rm -f "$batch_file" || true
@@ -331,9 +440,9 @@ flush_upload_batch() {
     [[ -z "${key:-}" ]] && continue
     local local_sha="$TMP_CHECKSUMS/$key.sha1"
     mkdir -p "$(dirname "$local_sha")"
-    printf '%s' "$sha" > "$local_sha"
+    printf '%s\n' "$sha" > "$local_sha"
 
-    if retry3 bash -c 'printf "%s" "$0" | aws s3 cp - "s3://'"$S3_BUCKET"'/.checksums/'"$key"'.sha1" --content-type "text/plain" "'"$AWS_ENDPOINT_ARG1"'" "'"$AWS_ENDPOINT_ARG2"'" >/dev/null 2>&1' "$sha"; then
+    if retry3 bash -c 'printf "%s\n" "$0" | aws s3 cp - "s3://'"$S3_BUCKET"'/.checksums/'"$key"'.sha1" --content-type "text/plain" "'"$AWS_ENDPOINT_ARG1"'" "'"$AWS_ENDPOINT_ARG2"'" >/dev/null 2>&1' "$sha"; then
       printf 'OK|%s|%s\n' "$key" "$action" >> "$report_pipe"
     else
       printf 'FAILED|%s|%s\n' "$key" "$action" >> "$report_pipe"
@@ -344,13 +453,13 @@ flush_upload_batch() {
   return 0
 }
 
-# ---------- step 4 & 5: create internal list and present to user (planning + execution)
+# ---------- steps 5–7: build processing plan, present summary, and execute (planning + execution)
 process_plan() {
   local valid="$1" missing="$2" empty="$3" corrupt="$4"
   local orphan_info="$5"
-  local report="$TMP_WORK/report.json"
+  local report="$S3C_ROOTDIR/report.json"
 
-  # step 4: create single internal list (combining missing + empty + corrupt)
+  # Step 5: create single internal list (combining missing + empty + corrupt)
   local already_valid missing_count empty_count corrupt_count total_to_process
   already_valid=$(wc -l < "$valid" 2>/dev/null | tr -d ' ' || echo 0)
   missing_count=$(wc -l < "$missing" 2>/dev/null | tr -d ' ' || echo 0)
@@ -358,7 +467,7 @@ process_plan() {
   corrupt_count=$(wc -l < "$corrupt" 2>/dev/null | tr -d ' ' || echo 0)
   total_to_process=$(( missing_count + empty_count + corrupt_count ))
 
-  # step 5: present complete list to user *before* downloading any large artifacts
+  # Step 6: present complete list to the user before downloading any large artifacts
   log ""
   log "========================================="
   log "Processing Plan Summary:"
@@ -402,7 +511,7 @@ process_plan() {
     return 0
   fi
 
-  # step 6: real execution - now download and process artifacts
+  # Step 7: real execution - download and process artifacts
   log ""
   log "Starting artifact processing (downloads + SHA1 computation)..."
   log ""
@@ -480,4 +589,280 @@ process_plan() {
   log "  Failed:                $failed"
   log "========================================="
   log "Report written to $report"
+}
+
+
+# ---------- debug: compare local vs remote checksums and sync behavior
+# Usage: debug_compare_local_remote <remote_checksums_file> [limit]
+# Produces: $S3C_ROOTDIR/debug-compare.txt and debug-compare.json
+_aws_sync_would_download_one() {
+  local key="$1" mode="$2"
+  # mode: 0=default, 1=size-only, 2=exact-timestamps
+  # Use aws s3 sync --dryrun to test if it would download this single file
+  local src="s3://$S3_BUCKET/.checksums/"
+  local dst="$TMP_CHECKSUMS"
+  local out
+  case "$mode" in
+    1)
+      out=$(aws s3 sync "$src" "$dst" --dryrun --size-only --exclude "*" --include "$key.sha1" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" 2>/dev/null || true)
+      ;;
+    2)
+      out=$(aws s3 sync "$src" "$dst" --dryrun --exact-timestamps --exclude "*" --include "$key.sha1" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" 2>/dev/null || true)
+      ;;
+    *)
+      out=$(aws s3 sync "$src" "$dst" --dryrun --exclude "*" --include "$key.sha1" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" 2>/dev/null || true)
+      ;;
+  esac
+
+  local would_download=0
+  if echo "$out" | grep -q "download:"; then
+    would_download=1
+  else
+    would_download=0
+  fi
+
+  echo $would_download
+}
+
+_rclone_would_copy_one() {
+  local key="$1" mode="$2"
+  # mode: 0=default comparison (copy dry-run), 1=ignore-existing (copy dry-run), 2=checksum sync decision
+  if ! command -v rclone >/dev/null 2>&1; then
+    echo 0; return 0
+  fi
+  # Configure rclone via environment to avoid inline backend parsing issues
+  local fps="${S3_USE_PATH_STYLE_ENDPOINT,,}"
+  local rremote=":s3:$S3_BUCKET/.checksums"
+  local rdst="$TMP_CHECKSUMS"
+  local out
+  local would_copy=0
+  case "$mode" in
+    1)
+      out=$(env RCLONE_S3_PROVIDER="Other" RCLONE_S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" RCLONE_S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" RCLONE_S3_REGION="$S3_REGION" RCLONE_S3_ENDPOINT="$S3_ENDPOINT" RCLONE_S3_FORCE_PATH_STYLE="$fps" \
+        rclone copy "$rremote" "$rdst" --dry-run --filter "+ $key.sha1" --filter "- *" --ignore-existing ${S3C_RCLONE_TRANSFERS:+--transfers "$S3C_RCLONE_TRANSFERS"} ${S3C_RCLONE_CHECKERS:+--checkers "$S3C_RCLONE_CHECKERS"} ${S3C_RCLONE_ARGS:+$S3C_RCLONE_ARGS} 2>/dev/null || true)
+      # Heuristic for copy on copy --dry-run (ignore-existing)
+      if printf "%s" "$out" | grep -Eqi '\bcopy\b|Copied \(new\)|to copy$|^Transferred:'; then
+        would_copy=1
+      else
+        would_copy=0
+      fi
+      ;;
+    2)
+      # Use rclone check with checksum to decide if the single file differs or is missing locally.
+      # check returns non-zero when there are differences/missing files.
+      if env RCLONE_S3_PROVIDER="Other" RCLONE_S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" RCLONE_S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" RCLONE_S3_REGION="$S3_REGION" RCLONE_S3_ENDPOINT="$S3_ENDPOINT" RCLONE_S3_FORCE_PATH_STYLE="$fps" \
+        rclone check "$rremote" "$rdst" --checksum --one-way --include "$key.sha1" ${S3C_RCLONE_CHECKERS:+--checkers "$S3C_RCLONE_CHECKERS"} ${S3C_RCLONE_ARGS:+$S3C_RCLONE_ARGS} >/dev/null 2>&1; then
+        would_copy=0
+      else
+        would_copy=1
+      fi
+      ;;
+    *)
+      out=$(env RCLONE_S3_PROVIDER="Other" RCLONE_S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" RCLONE_S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" RCLONE_S3_REGION="$S3_REGION" RCLONE_S3_ENDPOINT="$S3_ENDPOINT" RCLONE_S3_FORCE_PATH_STYLE="$fps" \
+        rclone copy "$rremote" "$rdst" --dry-run --filter "+ $key.sha1" --filter "- *" ${S3C_RCLONE_TRANSFERS:+--transfers "$S3C_RCLONE_TRANSFERS"} ${S3C_RCLONE_CHECKERS:+--checkers "$S3C_RCLONE_CHECKERS"} ${S3C_RCLONE_ARGS:+$S3C_RCLONE_ARGS} 2>/dev/null || true)
+      if printf "%s" "$out" | grep -Eqi '\bcopy\b|Copied \(new\)|to copy$|^Transferred:'; then
+        would_copy=1
+      else
+        would_copy=0
+      fi
+      ;;
+  esac
+  echo $would_copy
+}
+
+debug_compare_local_remote() {
+  local remote_checksums="$1"; local limit="${2:-30}"
+  local txt="$S3C_ROOTDIR/debug-compare.txt"
+  local json="$S3C_ROOTDIR/debug-compare.json"
+  : > "$txt"
+  echo '{"items":[' > "$json"
+
+  log "[DEBUG] Comparing up to $limit checksum files under prefix '$S3C_PREFIX' (local vs remote) ..."
+
+  local keys_processed=0 equal_count=0 diff_count=0 missing_local_count=0
+  local dflt_downloads=0 size_only_downloads=0 exact_downloads=0
+  local rcl_checksum_copies=0
+  local test_rclone=0
+  if [[ "${S3C_DEBUG_RCLONE:-1}" == "1" ]] && command -v rclone >/dev/null 2>&1; then
+    test_rclone=1
+  fi
+
+  if [[ ! -f "$remote_checksums" ]]; then
+    err "[DEBUG] Remote checksums file not found: $remote_checksums"
+    return 0
+  fi
+
+  while IFS= read -r key; do
+    [[ -z "$key" ]] && continue
+    # Restrict to selected prefix
+    case "$key" in
+      $S3C_PREFIX*) ;;
+      *) continue ;;
+    esac
+
+    local local_path="$TMP_CHECKSUMS/$key.sha1"
+    local local_present=0 remote_present=1
+    local equal=0
+    local equal_ign_ws=0
+
+    if [[ -f "$local_path" ]]; then
+      local_present=1
+    fi
+
+    local tmpf
+    tmpf="$(mktemp)"
+    if retry3 aws s3 cp "s3://$S3_BUCKET/.checksums/$key.sha1" "$tmpf" "$AWS_ENDPOINT_ARG1" "$AWS_ENDPOINT_ARG2" >/dev/null 2>&1; then
+      remote_present=1
+    else
+      remote_present=0
+    fi
+
+    # Determine equality
+    if [[ "$local_present" -eq 1 && "$remote_present" -eq 1 ]]; then
+      # Raw byte equality (preferred for matching rclone --checksum decisions)
+      if cmp -s "$local_path" "$tmpf"; then
+        equal=1
+        equal_count=$((equal_count+1))
+      else
+        diff_count=$((diff_count+1))
+      fi
+      # Whitespace-insensitive diagnostic (trim CR/LF/TAB/space)
+      local lv rv
+      lv="$(tr -d '\n\r\t ' < "$local_path" 2>/dev/null || echo '')"
+      rv="$(tr -d '\n\r\t ' < "$tmpf" 2>/dev/null || echo '')"
+      if [[ -n "$lv" && "$lv" == "$rv" ]]; then
+        equal_ign_ws=1
+      fi
+    else
+      if [[ "$local_present" -eq 1 ]]; then
+        # Remote missing but local present
+        diff_count=$((diff_count+1))
+      else
+        # Local missing
+        missing_local_count=$((missing_local_count+1))
+      fi
+    fi
+
+    rm -f "$tmpf" || true
+
+    # Would sync download? (aws)
+    local wd_default wd_size_only wd_exact
+    wd_default=$(_aws_sync_would_download_one "$key" 0)
+    wd_size_only=$(_aws_sync_would_download_one "$key" 1)
+    wd_exact=$(_aws_sync_would_download_one "$key" 2)
+    [[ "$wd_default" == "1" ]] && dflt_downloads=$((dflt_downloads+1))
+    [[ "$wd_size_only" == "1" ]] && size_only_downloads=$((size_only_downloads+1))
+    [[ "$wd_exact" == "1" ]] && exact_downloads=$((exact_downloads+1))
+
+    # Would rclone copy? (dry-run)
+    local rcl_chk_b=0 rcl_chk_raw=0 rcl_chk="na" j_rcl_chk="null"
+    if [[ "$test_rclone" -eq 1 ]]; then
+      # Probe rclone once (for logging/diagnostics), but derive the effective decision
+      # from byte equality and local presence to emulate "rclone sync --checksum" semantics
+      # robustly across providers.
+      rcl_chk_raw=$(_rclone_would_copy_one "$key" 2)
+      if [[ "$remote_present" -eq 1 ]]; then
+        if [[ "$local_present" -eq 0 ]]; then
+          rcl_chk_b=1  # would copy: local missing
+        else
+          if [[ "$equal" -eq 1 ]]; then
+            rcl_chk_b=0  # would skip: bytes are identical
+          else
+            rcl_chk_b=1  # would copy: bytes differ
+          fi
+        fi
+      else
+        rcl_chk_b=0  # remote missing -> nothing to copy
+      fi
+      [[ "$rcl_chk_b" == "1" ]] && rcl_checksum_copies=$((rcl_checksum_copies+1))
+      rcl_chk="$(if [[ $rcl_chk_b -eq 1 ]]; then echo copy; else echo skip; fi)"
+      j_rcl_chk="$(if [[ $rcl_chk_b -eq 1 ]]; then echo true; else echo false; fi)"
+    fi
+
+    printf '%s | local:%s | equal:%s | sync_default:%s | sync_size-only:%s | sync_exact:%s | rclone_checksum:%s\n' \
+      "$key" \
+      "$(if [[ $local_present -eq 1 ]]; then echo present; else echo missing; fi)" \
+      "$(if [[ $equal -eq 1 ]]; then echo same; else echo different; fi)" \
+      "$(if [[ $wd_default -eq 1 ]]; then echo download; else echo skip; fi)" \
+      "$(if [[ $wd_size_only -eq 1 ]]; then echo download; else echo skip; fi)" \
+      "$(if [[ $wd_exact -eq 1 ]]; then echo download; else echo skip; fi)" \
+      "$rcl_chk" >> "$txt"
+
+    # Append JSON item
+    {
+      printf '  {"key":"%s","local_present":%s,"equal":%s,"equal_ign_whitespace":%s,"sync_default_download":%s,"sync_size_only_download":%s,"sync_exact_download":%s,"rclone_checksum_copy":%s},\n' \
+        "$key" \
+        "$(if [[ $local_present -eq 1 ]]; then echo true; else echo false; fi)" \
+        "$(if [[ $equal -eq 1 ]]; then echo true; else echo false; fi)" \
+        "$(if [[ $equal_ign_ws -eq 1 ]]; then echo true; else echo false; fi)" \
+        "$(if [[ $wd_default -eq 1 ]]; then echo true; else echo false; fi)" \
+        "$(if [[ $wd_size_only -eq 1 ]]; then echo true; else echo false; fi)" \
+        "$(if [[ $wd_exact -eq 1 ]]; then echo true; else echo false; fi)" \
+        "$j_rcl_chk"
+    } >> "$json"
+
+    keys_processed=$((keys_processed+1))
+    [[ "$keys_processed" -ge "$limit" ]] && break
+  done < "$remote_checksums"
+
+  # Close JSON
+  sed -i '' -e '$ s/},/}/' "$json" 2>/dev/null || true
+  echo '],"summary":{' >> "$json"
+  printf '  "tested":%s,"equal":%s,"different_or_missing":%s,"sync_default_would_download":%s,"sync_size_only_would_download":%s,"sync_exact_would_download":%s,"rclone_checksum_would_copy":%s' \
+    "$keys_processed" "$equal_count" "$((diff_count + missing_local_count))" "$dflt_downloads" "$size_only_downloads" "$exact_downloads" "$rcl_checksum_copies" >> "$json"
+  echo '}}' >> "$json"
+
+  # Print a compact table to the console (helpful inside CI logs)
+  log "[DEBUG] Debug table (first $limit items under '$S3C_PREFIX'):"
+  log "-----------------------------------------------------------------------------------------------------------------------------------"
+  log "KEY (truncated)                                         | LOCAL   | EQUAL     | SYNC(def)    | SYNC(sz) | SYNC(exact) | RCL(chk)"
+  log "-----------------------------------------------------------------------------------------------------------------------------------"
+  # Render up to $limit rows from the text report into fixed-width columns
+  if [[ -s "$txt" ]]; then
+    # awk formats columns; truncates key to 55 chars. Split on literal '|' and trim spaces.
+    awk -F'[|]' -v LIM="$limit" '
+      BEGIN { OFS=" | " }
+      NR<=LIM {
+        key=$1; loc=$2; eq=$3; dflt=$4; size=$5; exact=$6; rclck=$7
+        # Trim leading/trailing whitespace from each field
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", loc)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", eq)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", dflt)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", size)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", exact)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", rclck)
+        # Extract values after labels
+        sub(/^local:/, "", loc)
+        sub(/^equal:/, "", eq)
+        sub(/^sync_default:/, "", dflt)
+        sub(/^sync_size-only:/, "", size)
+        sub(/^sync_exact:/, "", exact)
+        sub(/^rclone_checksum:/, "", rclck)
+        k=key
+        if (length(k)>55) k=substr(k,1,52)"..."
+        if (rclck == "") rclck = "-"
+        printf "%s | %6s | %7s | %9s | %8s | %10s | %7s\n", sprintf("%-55s", k), loc, eq, dflt, size, exact, rclck
+      }
+    ' "$txt" >&2
+  else
+    log "(no entries)"
+  fi
+  log "-----------------------------------------------------------------------------------------------------------------------------------"
+
+  log "[DEBUG] Wrote debug comparison to:"
+  log "        - $txt"
+  log "        - $json"
+  log "[DEBUG] Summary: tested=$keys_processed, equal=$equal_count, different_or_missing=$((diff_count + missing_local_count)), sync_default_would_download=$dflt_downloads, sync_size_only_would_download=$size_only_downloads, sync_exact_would_download=$exact_downloads, rclone_checksum_would_copy=$rcl_checksum_copies"
+
+  log "[DEBUG] Explanation:"
+  log "  - EQUAL compares RAW BYTES of the .sha1 files (no trimming). A newline-only difference will show as 'different'."
+  log "    See JSON field 'equal_ign_whitespace' for a whitespace-insensitive view."
+  log "  - Default 'aws s3 sync' decides to download when size differs OR remote LastModified is newer than local."
+  log "  - With '--size-only', it downloads only when size differs (ignores timestamps)."
+  log "  - With '--exact-timestamps', it treats files as equal only when size and LastModified are exactly the same; differing remote times cause a download."
+  log "  - If local != remote but sizes are identical, '--size-only' will SKIP (leaving an outdated local file)."
+  log "  - If default or exact mode would download but '--size-only' would skip, the likely reason is newer remote timestamp with same size."
+  log "  - If both would download, the sizes differ (or local file missing)."
+  log "  - RCL(chk): rclone sync --checksum (dry-run); ignores timestamps and uses checksums (ETag/MD5 on S3 for small files) to decide if content changed."
 }
