@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
-          key: checksums-temp-${{ runner.os }}-${{ github.run_id }}
+          key: checksums-temp-${{ runner.os }}
           restore-keys: |
             checksums-temp-${{ runner.os }}-
 
@@ -65,9 +65,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ vars.S3_SATIS_CACHE_DIR }}
-          key: s3-satis-${{ runner.os }}-${{ github.run_id }}
+          key: s3-satis-${{ runner.os }}
           restore-keys: |
-            s3-satis-${{ runner.os }}-
+            s3-satis-${{ runner.os }}
 
       - name: Fix checksums before build
         run: |
@@ -102,14 +102,14 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
-          key: checksums-temp-${{ runner.os }}-${{ github.run_id }}
+          key: checksums-temp-${{ runner.os }}
 
       - name: Save S3-Satis cache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: ${{ vars.S3_SATIS_CACHE_DIR }}
-          key: s3-satis-${{ runner.os }}-${{ github.run_id }}
+          key: s3-satis-${{ runner.os }}
 
       - name: Show cache state summary
         run: |
