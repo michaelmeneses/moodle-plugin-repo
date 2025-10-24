@@ -33,6 +33,7 @@ jobs:
       S3_USE_PATH_STYLE_ENDPOINT: ${{ vars.S3_USE_PATH_STYLE_ENDPOINT }}
       S3_SATIS_CACHE_DIR: ${{ vars.S3_SATIS_CACHE_DIR }}
       S3_SATIS_CACHE_CHECKSUMS: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
+      S3C_USE_RCLONE: ${{ vars.S3C_USE_RCLONE }}
 
     steps:
       - name: Checkout source-code
