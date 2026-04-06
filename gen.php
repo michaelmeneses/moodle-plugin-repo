@@ -6,8 +6,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/util.php';
 require_once __DIR__ . '/opengraph_cache.php';
 
-const MOODLE_LATEST = "5.1";
-const MOODLE_LATEST_BEFORE = "5.0";
+const MOODLE_LATEST = "5.2";
+const MOODLE_LATEST_BEFORE = "5.1";
 const MOODLE_35_BUILD = "2018051700";
 
 $satisfile = __DIR__ . '/satis.json';
@@ -205,9 +205,10 @@ foreach ($packages as $package) {
 }
 
 $coremaxversions = [
-    '5.1' => 3,
-    '5.0' => 6,
-    '4.5' => 10,
+    '5.2' => 0,
+    '5.1' => 4,
+    '5.0' => 7,
+    '4.5' => 11,
     '4.4' => 12,
     '4.3' => 12,
     '4.2' => 11,
