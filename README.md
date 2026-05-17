@@ -179,9 +179,41 @@ Add your repository URL to your composer.json:
 
 ## Environment Variables
 
-Configure the following variables in the `.env` file:
+Three options:
 
-```env
-SATIS_NAME="Your repository name"
-SATIS_URL="https://your.satis.domain.com"
+### Option A — Manual
+
+```bash
+cp .env.example .env
+# Edit .env with your credentials
 ```
+
+### Option B — 1Password with `op run` (recommended)
+
+```bash
+op run --env-file=.env.example -- composer full:s3-satis
+```
+
+The `.env.example` contains `op://` references resolved at runtime without generating a physical `.env` file.
+
+### Option C — 1Password with `op inject`
+
+```bash
+op inject -i .env.production.tpl -o .env
+```
+
+Both options require [1Password CLI](https://developer.1password.com/docs/cli/) authenticated with access to vault `CI-SATIS-MOODLE`.
+
+| File                  | Description                                 |
+|-----------------------|---------------------------------------------|
+| `.env.example`        | Template with `op://` refs for `op run`     |
+| `.env.production.tpl` | Template with `{{ op:// }}` for `op inject` |
+
+### 1Password Items
+
+Vault: `CI-SATIS-MOODLE` / Item: `CLOUDFLARE-satis-moodle`
+
+| Section   | Fields                                                     |
+|-----------|------------------------------------------------------------|
+| `STORAGE` | `access_key_id`, `secret_access_key`, `bucket`, `endpoint` |
+| `ACCOUNT` | `account_id`, `api_token`, `pages_project`                 |
