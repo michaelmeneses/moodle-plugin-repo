@@ -66,6 +66,7 @@ jobs:
           command -v rclone >/dev/null 2>&1 || curl -fsSL https://rclone.org/install.sh | bash
 
       - name: Restore S3-Satis cache from R2
+        shell: bash
         run: |
           set -e
           mkdir -p "$S3_SATIS_CACHE_DIR"
@@ -114,6 +115,7 @@ jobs:
 
       - name: Archive S3-Satis cache to R2
         if: success()
+        shell: bash
         run: |
           set -e
           fps="${S3_USE_PATH_STYLE_ENDPOINT,,}"
