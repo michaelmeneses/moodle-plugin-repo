@@ -60,14 +60,29 @@ jobs:
           restore-keys: |
             checksums-temp-${{ runner.os }}-
 
-      - name: Restore S3-Satis cache
-        id: restore-s3-satis
-        uses: actions/cache/restore@v6
-        with:
-          path: ${{ vars.S3_SATIS_CACHE_DIR }}
-          key: s3-satis-${{ runner.os }}
-          restore-keys: |
-            s3-satis-${{ runner.os }}
+      - name: Ensure rclone is installed
+        run: |
+          set -e
+          command -v rclone >/dev/null 2>&1 || curl -fsSL https://rclone.org/install.sh | bash
+
+      - name: Restore S3-Satis cache from R2
+        run: |
+          set -e
+          mkdir -p "$S3_SATIS_CACHE_DIR"
+          fps="${S3_USE_PATH_STYLE_ENDPOINT,,}"
+          echo ">> Fetching s3-satis cache archive from R2 (_cache/s3-satis-cache.tar.gz)"
+          if RCLONE_S3_PROVIDER="Other" \
+             RCLONE_S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" \
+             RCLONE_S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" \
+             RCLONE_S3_REGION="$S3_REGION" \
+             RCLONE_S3_ENDPOINT="$S3_ENDPOINT" \
+             RCLONE_S3_FORCE_PATH_STYLE="$fps" \
+             rclone copyto ":s3:$S3_BUCKET/_cache/s3-satis-cache.tar.gz" /tmp/s3-satis-cache.tar.gz; then
+            echo ">> Extracting cache archive into $S3_SATIS_CACHE_DIR"
+            tar xzf /tmp/s3-satis-cache.tar.gz -C "$S3_SATIS_CACHE_DIR"
+          else
+            echo ">> No cache archive found in R2 yet (first run) -- proceeding with a cold build"
+          fi
 
       - name: Fix checksums before build
         run: |
@@ -97,19 +112,27 @@ jobs:
           echo "Running composer run full:s3-satis"
           composer run full:s3-satis
 
+      - name: Archive S3-Satis cache to R2
+        if: success()
+        run: |
+          set -e
+          fps="${S3_USE_PATH_STYLE_ENDPOINT,,}"
+          echo ">> Archiving $S3_SATIS_CACHE_DIR to R2 (_cache/s3-satis-cache.tar.gz)"
+          tar czf /tmp/s3-satis-cache.tar.gz -C "$S3_SATIS_CACHE_DIR" .
+          RCLONE_S3_PROVIDER="Other" \
+          RCLONE_S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" \
+          RCLONE_S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" \
+          RCLONE_S3_REGION="$S3_REGION" \
+          RCLONE_S3_ENDPOINT="$S3_ENDPOINT" \
+          RCLONE_S3_FORCE_PATH_STYLE="$fps" \
+          rclone copyto /tmp/s3-satis-cache.tar.gz ":s3:$S3_BUCKET/_cache/s3-satis-cache.tar.gz"
+
       - name: Save temp checksums cache
         if: always()
         uses: actions/cache/save@v6
         with:
           path: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
           key: checksums-temp-${{ runner.os }}
-
-      - name: Save S3-Satis cache
-        if: always()
-        uses: actions/cache/save@v6
-        with:
-          path: ${{ vars.S3_SATIS_CACHE_DIR }}
-          key: s3-satis-${{ runner.os }}
 
       - name: Show cache state summary
         run: |
