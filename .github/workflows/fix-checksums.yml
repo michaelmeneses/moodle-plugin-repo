@@ -35,11 +35,11 @@ jobs:
 
     steps:
       - name: Checkout source-code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Restore temp checksums cache
         id: restore-temp-checksums
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
           key: checksums-temp-${{ runner.os }}
@@ -56,7 +56,7 @@ jobs:
 
       - name: Save temp checksums cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ vars.S3_SATIS_CACHE_CHECKSUMS }}
           key: checksums-temp-${{ runner.os }}
