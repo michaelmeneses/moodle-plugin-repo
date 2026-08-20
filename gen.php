@@ -55,7 +55,14 @@ if (!empty($_SERVER['argv'])) {
 // replaced by our own D1-backed feed (worker-ts-moodle-plugin-scraper), same
 // schema, validated downloadurls, dead-link filtering. See
 // middag-io/worker-ts-satis-gateway#7 and middag-io/worker-ts-moodle-plugin-scraper#1.
-$api = 'https://moodle-pluglist.middag.io/';
+//
+// Uses /satis (not /), which prefers each version's own already-mirrored
+// satis.middag.com.br R2 URL when verified, falling back to the external
+// source only for versions we haven't mirrored yet. This means Satis's own
+// archive step -- when its local build cache is cold and it has to actually
+// fetch a dist file -- fetches from our own R2 instead of re-hitting
+// marketplace.moodle.com/GitHub (which we've seen rate-limit us, HTTP 429).
+$api = 'https://moodle-pluglist.middag.io/satis';
 $corebase = 'https://download.moodle.org/download.php/direct';
 
 $satisjson = [];
