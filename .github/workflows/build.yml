@@ -72,13 +72,19 @@ jobs:
           mkdir -p "$S3_SATIS_CACHE_DIR"
           fps="${S3_USE_PATH_STYLE_ENDPOINT,,}"
           echo ">> Fetching s3-satis cache archive from R2 (_cache/s3-satis-cache.tar.gz)"
-          if RCLONE_S3_PROVIDER="Other" \
-             RCLONE_S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" \
-             RCLONE_S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" \
-             RCLONE_S3_REGION="$S3_REGION" \
-             RCLONE_S3_ENDPOINT="$S3_ENDPOINT" \
-             RCLONE_S3_FORCE_PATH_STYLE="$fps" \
-             rclone copyto ":s3:$S3_BUCKET/_cache/s3-satis-cache.tar.gz" /tmp/s3-satis-cache.tar.gz; then
+          rm -f /tmp/s3-satis-cache.tar.gz
+          RCLONE_S3_PROVIDER="Other" \
+          RCLONE_S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" \
+          RCLONE_S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" \
+          RCLONE_S3_REGION="$S3_REGION" \
+          RCLONE_S3_ENDPOINT="$S3_ENDPOINT" \
+          RCLONE_S3_FORCE_PATH_STYLE="$fps" \
+          rclone copyto ":s3:$S3_BUCKET/_cache/s3-satis-cache.tar.gz" /tmp/s3-satis-cache.tar.gz || true
+          # rclone copyto exits 0 ("nothing to transfer") even when the source
+          # is missing -- it does NOT create the destination file, so checking
+          # for the file's existence (not the exit code) is the only reliable
+          # way to tell a real download apart from a no-op.
+          if [ -s /tmp/s3-satis-cache.tar.gz ]; then
             echo ">> Extracting cache archive into $S3_SATIS_CACHE_DIR"
             tar xzf /tmp/s3-satis-cache.tar.gz -C "$S3_SATIS_CACHE_DIR"
           else
