@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: middagtec/image-bitbucket-ci:v5-php82
+      image: middagtec/image-bitbucket-ci:v5-php84
       options: --user root
 
     env:
