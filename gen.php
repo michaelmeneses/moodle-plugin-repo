@@ -208,7 +208,21 @@ foreach ($packages as $package) {
     $satisjson['repositories'][] = $package;
 }
 
-$coremaxversions = [
+// Moodle core versions used to be built from a hardcoded major => max-minor
+// table (see git history), manually updated every time Moodle shipped a new
+// version. Replaced with a dynamic feed backed by worker-ts-moodle-plugin-scraper's
+// moodle_core_releases D1 table, itself populated from the satis-moodle R2
+// bucket's actual archived zips (scripts/sync-moodle-core.mjs) -- so coverage
+// tracks what's really mirrored instead of a manually maintained guess.
+//
+// The old hardcoded table is kept below as $coremaxversions_fallback purely
+// as an emergency fallback: if the dynamic feed is unreachable or comes back
+// empty, we fall back to it (frozen as of 2026-08, so it will drift over
+// time) rather than silently publishing a satis.json with zero moodle/moodle
+// packages.
+$coreapi = 'https://moodle-pluglist.middag.io/moodle-core';
+
+$coremaxversions_fallback = [
     '5.2' => 0,
     '5.1' => 4,
     '5.0' => 7,
@@ -230,41 +244,65 @@ $coremaxversions = [
     '3.2' => 9,
 ];
 
+function moodle_core_fallback_versions(array $coremaxversions, string $corebase): array
+{
+    $versions = [];
+    foreach ($coremaxversions as $major => $max) {
+        for ($i = $max; $i >= 0; $i--) {
+            $versionno = $major . '.' . $i;
+            $directory = 'stable' . str_replace('.', '', $major);
+            if ($major >= 4) {
+                $sub = str_replace('.', '', $major);
+                $directory = 'stable' . $sub[0] . '0' . $sub[1];
+            }
+            $filename = "moodle-$versionno.zip";
+            if ($i === 0) {
+                $filename = "moodle-$major.zip";
+            }
+            $versions[] = (object)[
+                'version' => $versionno,
+                'downloadurl' => $corebase . "/$directory/$filename",
+            ];
+        }
+    }
+    return $versions;
+}
+
+$coreversions = [];
+try {
+    $coreversionsjson = get_content_from_url($coreapi);
+    $coredata = json_decode($coreversionsjson, false, 512, JSON_THROW_ON_ERROR);
+    if (!empty($coredata->versions)) {
+        $coreversions = $coredata->versions;
+    } else {
+        echo 'ERROR: dynamic moodle-core feed (' . $coreapi . ') returned no versions; falling back to hardcoded list' . PHP_EOL;
+    }
+} catch (\Throwable $e) {
+    echo 'ERROR: failed to fetch dynamic moodle-core feed (' . $coreapi . '): ' . $e->getMessage() . '; falling back to hardcoded list' . PHP_EOL;
+}
+
+if (empty($coreversions)) {
+    $coreversions = moodle_core_fallback_versions($coremaxversions_fallback, $corebase);
+}
+
 $moodles = [
     'type' => 'package',
     'package' => []
 ];
-foreach ($coremaxversions as $major => $max) {
-    for ($i = $max; $i >= 0; $i--) {
-        $versionno = $major . '.' . $i;
-        $directory = 'stable' . str_replace('.', '', $major);
-        if ($major >= 4) {
-            $sub = str_replace('.', '', $major);
-            $directory = 'stable' . $sub[0] . '0' . $sub[1];
-        }
-        $filename = "moodle-$versionno.zip";
-        if ($i === 0) {
-            $filename = "moodle-$major.zip";
-        }
-        $url = $corebase . "/$directory/$filename";
-        if ($major === '5.0' && $i === 0) {
-            // Special case for Moodle 5.0
-            $url = 'https://satis.middag.com.br/dist/moodle/moodle/moodle-moodle-5.0.0.zip';
-        }
-        $moodles['package'][] = [
-            'name' => 'moodle/moodle',
-            'version' => $versionno,
-            'dist' => [
-                'url' => $url,
-                'type' => 'zip'
-            ],
-            'require' => [
-                'composer/installers' => '*'
-            ]
-        ];
+foreach ($coreversions as $coreversion) {
+    $moodles['package'][] = [
+        'name' => 'moodle/moodle',
+        'version' => $coreversion->version,
+        'dist' => [
+            'url' => $coreversion->downloadurl,
+            'type' => 'zip'
+        ],
+        'require' => [
+            'composer/installers' => '*'
+        ]
+    ];
 
-        echo 'Loaded moodle/moodle - version: ' . $versionno . ((PHP_SAPI === 'cli') ? PHP_EOL : '<br>');
-    }
+    echo 'Loaded moodle/moodle - version: ' . $coreversion->version . ((PHP_SAPI === 'cli') ? PHP_EOL : '<br>');
 }
 
 $satisjson['repositories'][] = $moodles;
