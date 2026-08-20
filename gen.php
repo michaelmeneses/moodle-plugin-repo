@@ -51,7 +51,11 @@ if (!empty($_SERVER['argv'])) {
     }
 }
 
-$api = 'https://download.moodle.org/api/1.3/pluglist.php';
+// Legacy API deprecated 2026-08-31 (docs.moodle.org/501/en/Plugins_FAQ) --
+// replaced by our own D1-backed feed (worker-ts-moodle-plugin-scraper), same
+// schema, validated downloadurls, dead-link filtering. See
+// middag-io/worker-ts-satis-gateway#7 and middag-io/worker-ts-moodle-plugin-scraper#1.
+$api = 'https://moodle-pluglist.middag.io/';
 $corebase = 'https://download.moodle.org/download.php/direct';
 
 $satisjson = [];
