@@ -116,6 +116,13 @@ jobs:
       - name: Build s3-satis
         run: |
           set -e
+          # composer/satis (dev-main) inspects VCS package sources via `git`
+          # subprocesses that inherit this step's cwd -- the moodle-plugin-repo
+          # checkout itself. A newer git (as shipped by the php84 image) then
+          # refuses to run from a repo whose owning UID doesn't match the
+          # invoking process, aborting the whole `build` command. This is a
+          # throwaway CI container, so trust every directory.
+          git config --global --add safe.directory '*'
           echo "Running composer run full:s3-satis"
           composer run full:s3-satis
 
