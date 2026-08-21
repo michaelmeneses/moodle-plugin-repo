@@ -133,7 +133,7 @@ jobs:
           RCLONE_S3_REGION="$S3_REGION" \
           RCLONE_S3_ENDPOINT="$S3_ENDPOINT" \
           RCLONE_S3_FORCE_PATH_STYLE="$fps" \
-          rclone copyto /tmp/s3-satis-cache.tar.gz ":s3:$S3_BUCKET/_cache/s3-satis-cache.tar.gz"
+          rclone copyto /tmp/s3-satis-cache.tar.gz ":s3:$S3_BUCKET/_cache/s3-satis-cache.tar.gz" --s3-no-check-bucket
 
       - name: Save temp checksums cache
         if: always()
